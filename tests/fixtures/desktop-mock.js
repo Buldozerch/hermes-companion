@@ -46,7 +46,9 @@
           return;
         case "save_setup": Object.assign(server.setup, args.setup); return;
         case "get_plan": return { ready: true, blockers: [], warnings: ["Less than 8 GB of disk space is available. Installation may run out of space."], steps: [{ id: "install", title: "Install Hermes Agent", description: "Use the official installer and stable release channel." }] };
-        case "get_deployment": return structuredClone(state.job);
+        case "get_deployment":
+          if (state.deploymentError) throw {code:"connection",message:"The server status could not be refreshed."};
+          return {...structuredClone(state.job), checkedAt:Math.floor(Date.now()/1000)+(state.serverClockOffset??0)};
         case "read_server_settings":
           state.settingsReads++;
           return {setup:structuredClone(state.remoteSetup ?? server.setup), configuredCredentials:structuredClone(state.configuredCredentials), modelConfigured:state.job.modelConfigured, authorizedProviders:structuredClone(state.authorizedProviders), preparedProviders:structuredClone(state.preparedProviders), revision:state.revision, warnings:[]};
@@ -74,6 +76,7 @@
           state.lastSecrets = args.secrets;
           Object.assign(server.setup,{deferModelSetup:true,model:"",channels:[],telegram:false,tools:["file","memory","web","tts"]});
           Object.assign(state.job, { jobId: "00000000-0000-4000-8000-000000000001", state: "running", step: "install", version: "v9.8.7", managed: true, events: ["Resolving the latest stable Hermes release.", "Installing Hermes v9.8.7."] });
+          Object.assign(state.job,{startedAt:Math.floor(Date.now()/1000)+(state.serverClockOffset??0)-120,outputUpdatedAt:Math.floor(Date.now()/1000)+(state.serverClockOffset??0)-60,checkedAt:Math.floor(Date.now()/1000)+(state.serverClockOffset??0)});
           return structuredClone(state.job);
         case "apply_setup":
           state.applyCalls++;
@@ -100,7 +103,9 @@
           if (args.action === "stop") { state.job.serviceActive = false; state.job.apiHealthy = false; }
           else { state.job.serviceActive = true; state.job.apiHealthy = true; }
           return structuredClone(state.job);
-        case "get_remote_logs": return "Hermes service started.\nAPI_SERVER_KEY=[REDACTED]\n";
+        case "get_remote_logs":
+          state.logsReads=(state.logsReads??0)+1;
+          return state.remoteLogs ?? "Hermes service started.\nAPI_SERVER_KEY=[REDACTED]\n";
         default: throw { code: "fixture", message: "Unexpected IPC command in test fixture: " + command };
       }
     },

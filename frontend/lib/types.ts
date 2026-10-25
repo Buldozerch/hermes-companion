@@ -107,6 +107,10 @@ export interface DeploymentStatus {
   apiHealthy: boolean;
   modelConfigured: boolean;
   rebootRequired: boolean;
+  startedAt?: number | null;
+  updatedAt?: number | null;
+  checkedAt?: number | null;
+  outputUpdatedAt?: number | null;
   events: string[];
 }
 export type Page = "overview" | "servers" | "settings" | "activity" | "setup";

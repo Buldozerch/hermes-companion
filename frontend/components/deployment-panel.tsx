@@ -6,6 +6,7 @@ import { Check, Download, FileText, Play, Power, RotateCw, Square, Terminal } fr
 import { useLocale } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { DeploymentActivity } from "@/components/deployment-activity";
 
 import { Busy, Notice } from "@/components/shared";
 import { api, desktop } from "@/lib/api";
@@ -183,22 +184,28 @@ export function DeploymentPanel({
         </Notice>
       )}
       {installing && (
-        <div role="status" className="deployment-progress">
-          <Busy>
-            {t(
-              preparing
-                ? "Preparing provider…"
-                : updating && status?.step === "install"
-                  ? "Updating Hermes…"
-                  : (stageLabels[status?.step ?? "system"] ?? "Installing"),
-            )}
-          </Busy>
+        <div className="deployment-progress">
+          <div role="status" className="deployment-stage">
+            <Busy>
+              {t(
+                preparing
+                  ? "Preparing provider…"
+                  : updating && status?.step === "install"
+                    ? "Updating Hermes…"
+                    : (stageLabels[status?.step ?? "system"] ?? "Installing"),
+              )}
+            </Busy>
+          </div>
+          <span className="deployment-stage-count">
+            {t("Stage {step} of {total}", { step: progress + 1, total: stages.length })}
+          </span>
           <div
             role="progressbar"
             aria-label={t(configuring ? "Settings progress" : "Installation progress")}
             aria-valuemin={0}
             aria-valuemax={5}
             aria-valuenow={progress}
+            aria-valuetext={t(stageLabels[status?.step ?? "system"] ?? "Installing")}
           >
             <span style={{ width: `${progress * 20}%` }} />
           </div>
@@ -210,6 +217,26 @@ export function DeploymentPanel({
             )}
           </p>
         </div>
+      )}
+      {(status?.state === "failed" || status?.state === "interrupted") && (
+        <Notice
+          error
+          title={
+            status.state === "failed" ? "Server operation failed" : "Server operation interrupted"
+          }
+        >
+          {t("The operation stopped at: {stage}. Review the output below before retrying.", {
+            stage: t(stageLabels[status.step] ?? "Installing"),
+          })}
+        </Notice>
+      )}
+      {status && (installing || status.state === "failed" || status.state === "interrupted") && (
+        <DeploymentActivity
+          key={`${server.id}:${status.jobId}`}
+          serverId={server.id}
+          status={status}
+          connected={connected && !rebooting}
+        />
       )}
       {status?.state === "succeeded" && (
         <p className="saved-message">

@@ -47,6 +47,7 @@ import { Overview, ServerGuide, ServerTile } from "@/components/overview";
 import { ModelSettings, SetupWizard } from "@/components/setup-wizard";
 import { HermesManagement } from "@/components/hermes-management";
 import { AppUpdater } from "@/components/app-updater";
+import { hermesInstalled } from "@/lib/managed-settings";
 import type { DeploymentStatus } from "@/lib/types";
 import { BrandMark, Busy, ExternalLink, Notice, PageTitle } from "@/components/shared";
 
@@ -74,6 +75,10 @@ export default function App() {
   const [removing, setRemoving] = useState<Server | null>(null);
   const [busy, setBusy] = useState(false);
   const selected = workspace.servers.find((server) => server.id === selectedId);
+  const settingsServers = workspace.servers.filter(
+    (server) => connectedIds.includes(server.id) && hermesInstalled(deployments[server.id]),
+  );
+  const settingsAvailable = !desktop || settingsServers.length > 0;
   const refresh = useCallback(async () => {
     const next = await api.load();
     setWorkspace(next);
@@ -140,7 +145,7 @@ export default function App() {
   function select(server: Server) {
     setSelectedId(server.id);
     const status = deployments[server.id];
-    if (connectedIds.includes(server.id) && status?.managed && status.installedVersion) {
+    if (connectedIds.includes(server.id) && hermesInstalled(status)) {
       navigate("settings");
       return;
     }
@@ -187,7 +192,7 @@ export default function App() {
     if (selectedId && desktop) {
       const status = await api.deployment(selectedId);
       setDeployments((previous) => ({ ...previous, [selectedId]: status }));
-      if (status.managed && status.installedVersion) navigate("settings");
+      if (hermesInstalled(status)) navigate("settings");
       else if (status.state === "running" || status.state === "starting") setStep(3);
     }
   }
@@ -236,7 +241,22 @@ export default function App() {
           {navigation.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => navigate(id)}
+              disabled={id === "settings" && !settingsAvailable}
+              title={
+                id === "settings" && !settingsAvailable
+                  ? t("Install Hermes on a connected server to unlock settings.")
+                  : undefined
+              }
+              onClick={() => {
+                if (
+                  id === "settings" &&
+                  desktop &&
+                  !settingsServers.some((server) => server.id === selectedId)
+                ) {
+                  setSelectedId(settingsServers[0]?.id ?? null);
+                }
+                navigate(id);
+              }}
               className={
                 page === id || (page === "setup" && id === "servers")
                   ? "nav-item active"

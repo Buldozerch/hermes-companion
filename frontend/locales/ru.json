@@ -933,5 +933,22 @@
   "Reboot server": "Перезагрузить сервер",
   "Server reboot requested": "Запрошена перезагрузка сервера",
   "Reconnect to server": "Подключиться снова",
-  "SSH was disconnected after the reboot request. Wait for the server to start, then reconnect.": "После запроса перезагрузки SSH отключён. Дождитесь запуска сервера и подключитесь снова."
+  "SSH was disconnected after the reboot request. Wait for the server to start, then reconnect.": "После запроса перезагрузки SSH отключён. Дождитесь запуска сервера и подключитесь снова.",
+  "Elapsed": "Прошло времени",
+  "Time in this view": "Время на этом экране",
+  "Last status check": "Статус проверен",
+  "{time} ago": "{time} назад",
+  "Last installer output": "Последний вывод установщика",
+  "Downloads and builds can take several minutes without new output. Elapsed time is not a completion estimate.": "Загрузка и сборка могут идти несколько минут без новых строк. Таймер показывает прошедшее время, а не прогноз завершения.",
+  "Live installer output": "Вывод установщика в реальном времени",
+  "Refreshes every 6 seconds": "Обновляется каждые 6 секунд",
+  "Installer output": "Вывод установщика",
+  "Waiting for installer output…": "Ожидаем вывод установщика…",
+  "No installer output is available. Open diagnostic logs for details.": "Вывод установщика недоступен. Подробности — в диагностических логах.",
+  "Stage {step} of {total}": "Этап {step} из {total}",
+  "Server operation failed": "Операция на сервере завершилась ошибкой",
+  "Server operation interrupted": "Операция на сервере прервана",
+  "The operation stopped at: {stage}. Review the output below before retrying.": "Операция остановилась на этапе «{stage}». Перед повторной попыткой проверьте вывод ниже.",
+  "Install Hermes on a connected server to unlock settings.": "Завершите установку Hermes на подключённом сервере, чтобы открыть настройки.",
+  "The server is reachable. Install Hermes, then connect your model and services.": "Соединение с сервером установлено. Установите Hermes, затем подключите модель и сервисы."
 }

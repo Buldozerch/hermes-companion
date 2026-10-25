@@ -25,8 +25,8 @@ const setupFlow = [
   { icon: Cloud, title: "Buy a VPS", text: "Hosting providers and recommended specifications" },
   { icon: ServerIcon, title: "Server profile", text: "SSH address, port and username" },
   { icon: KeyRound, title: "SSH check", text: "Host key, access and resources" },
-  { icon: Settings2, title: "Hermes settings", text: "Model and selected integrations" },
   { icon: Check, title: "Installation plan", text: "Review the changes before installation" },
+  { icon: Settings2, title: "Hermes settings", text: "Model and selected integrations" },
 ];
 
 export function Overview({

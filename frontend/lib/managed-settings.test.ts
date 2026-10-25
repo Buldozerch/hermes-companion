@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeSetup } from "./setup-catalog";
 import {
   availableCredentials,
+  hermesInstalled,
   serverAction,
   settingsChanges,
   validateManagedSettings,
@@ -111,10 +112,15 @@ describe("installed Hermes management", () => {
     const installed = {
       managed: true,
       installedVersion: "v1.2.3",
+      serviceInstalled: true,
       state: "succeeded",
     } as DeploymentStatus;
     expect(serverAction(false, installed)).toBe("Connect to server");
     expect(serverAction(true, installed)).toBe("Manage Hermes");
+    expect(hermesInstalled({ ...installed, serviceInstalled: false })).toBe(false);
+    expect(serverAction(true, { ...installed, serviceInstalled: false, state: "failed" })).toBe(
+      "Continue installation",
+    );
     expect(serverAction(true, { ...installed, state: "running" })).toBe("Show progress");
     expect(
       serverAction(true, { ...installed, managed: false, installedVersion: null, state: "none" }),

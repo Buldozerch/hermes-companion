@@ -139,6 +139,10 @@ pub struct DeploymentStatus {
     pub api_healthy: bool,
     pub model_configured: bool,
     pub reboot_required: bool,
+    pub started_at: Option<u64>,
+    pub updated_at: Option<u64>,
+    pub checked_at: Option<u64>,
+    pub output_updated_at: Option<u64>,
     pub events: Vec<String>,
 }
 
@@ -175,6 +179,7 @@ pub fn parse_status(output: &str) -> Result<DeploymentStatus> {
             .map(|value| (*value).to_owned())
     };
     let yes = |key| values.get(key) == Some(&"yes");
+    let timestamp = |key| values.get(key).and_then(|value| value.parse::<u64>().ok());
     Ok(DeploymentStatus {
         job_id: optional("job_id"),
         state,
@@ -188,6 +193,10 @@ pub fn parse_status(output: &str) -> Result<DeploymentStatus> {
         api_healthy: yes("api_healthy"),
         model_configured: yes("model_configured"),
         reboot_required: yes("reboot_required"),
+        started_at: timestamp("started_at"),
+        updated_at: timestamp("updated_at"),
+        checked_at: timestamp("checked_at"),
+        output_updated_at: timestamp("output_updated_at"),
         events: events.lines().take(80).map(str::to_owned).collect(),
     })
 }
@@ -530,6 +539,20 @@ mod tests {
     fn log_content_cannot_override_job_metadata() -> Result<()> {
         let value = parse_status("state=failed\n__EVENTS__\nstate=succeeded\n")?;
         assert_eq!(value.state, JobState::Failed);
+        Ok(())
+    }
+    #[test]
+    fn progress_timestamps_are_optional_and_cannot_be_overridden_by_logs() -> Result<()> {
+        let value = parse_status(
+            "state=running\nstarted_at=100\nupdated_at=120\nchecked_at=180\noutput_updated_at=150\n__EVENTS__\nstarted_at=0\n",
+        )?;
+        assert_eq!(value.started_at, Some(100));
+        assert_eq!(value.updated_at, Some(120));
+        assert_eq!(value.checked_at, Some(180));
+        assert_eq!(value.output_updated_at, Some(150));
+        let legacy = parse_status("state=running\nstarted_at=invalid\n")?;
+        assert_eq!(legacy.started_at, None);
+        assert_eq!(legacy.checked_at, None);
         Ok(())
     }
     #[test]

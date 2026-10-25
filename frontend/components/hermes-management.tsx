@@ -18,6 +18,7 @@ import { normalizeSetup, selectedProvider, usesBrowserAuth } from "@/lib/setup-c
 import { activeCredentialNames, validateSetup } from "@/lib/setup-services";
 import {
   availableCredentials,
+  hermesInstalled,
   settingsChanges,
   settingsSections,
   validateManagedSettings,
@@ -64,7 +65,7 @@ export function HermesManagement({
   const [showStatus, setShowStatus] = useState(false);
   const request = useRef(0);
   const wasRunning = useRef(false);
-  const installed = !!status?.managed && !!status.installedVersion;
+  const installed = hermesInstalled(status);
   const running = status?.state === "starting" || status?.state === "running";
   useEffect(() => {
     if (running) setShowStatus(true);

@@ -8,6 +8,9 @@ export const settingsSections: { id: SettingsSection; label: string }[] = [
   { id: "services", label: "Services" },
   { id: "tools", label: "Agent tools" },
 ];
+export function hermesInstalled(status?: DeploymentStatus | null) {
+  return !!status?.managed && !!status.installedVersion && status.serviceInstalled;
+}
 const fields: Record<SettingsSection, (keyof SetupOptions)[]> = {
   model: [
     "deferModelSetup",
@@ -106,7 +109,7 @@ export function validateManagedSettings(
 export function serverAction(connected: boolean, status?: DeploymentStatus) {
   if (!connected) return "Connect to server";
   if (status?.state === "starting" || status?.state === "running") return "Show progress";
-  if (status?.managed && status.installedVersion) return "Manage Hermes";
+  if (hermesInstalled(status)) return "Manage Hermes";
   if (!status) return "Checking server…";
   return "Continue installation";
 }

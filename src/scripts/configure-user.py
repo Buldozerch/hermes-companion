@@ -9,6 +9,32 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 
+def config_section(config, name, *, create=False):
+    """Native templates use empty YAML sections (None) to inherit defaults."""
+    value = config.get(name)
+    if value is None:
+        value = {}
+        if create:
+            config[name] = value
+    if not isinstance(value, dict):
+        raise ValueError('A configuration section must contain a YAML mapping.')
+    return value
+
+
+def configuration_error(error):
+    """Report a useful location without exception messages, source text or locals."""
+    kind = type(error).__name__ if type(error).__module__ == 'builtins' else 'ConfigurationError'
+    line = None
+    source = globals().get('__file__', '<string>')
+    trace = error.__traceback__
+    while trace:
+        if trace.tb_frame.f_code.co_filename in {source, '<string>'}:
+            line = trace.tb_lineno
+        trace = trace.tb_next
+    location = f'; configure-user.py:{line}' if line is not None else ''
+    return {'error': f'The installed Hermes configuration writer failed ({kind}{location}). No secret values were logged.'}
+
+
 def combined_catalog(catalog):
     return {**catalog, 'providers': catalog['providers'] + [item for item in catalog.get('additionalProviders', []) if item['id'] not in {row['id'] for row in catalog['providers']} ]}
 
@@ -61,7 +87,7 @@ def read_settings(fallback, catalog, config_api):
     env = config_api.load_env()
     setup = dict(fallback)
     warnings = []
-    model = config.get('model', {})
+    model = config.get('model') or {}
     if isinstance(model, str):
         model = {'default': model}
     setup['deferModelSetup'] = (model.get('provider') == '' and not model.get('default')) or (not model and fallback.get('deferModelSetup', False))
@@ -109,21 +135,21 @@ def read_settings(fallback, catalog, config_api):
         configured.add('QWEN_AUTH_JSON')
     if env.get('GOOGLE_APPLICATION_CREDENTIALS'):
         configured.add('GOOGLE_SERVICE_ACCOUNT_JSON')
-    channels = config.get('platforms', {})
-    setup['channels'] = [item['id'] for item in catalog['channels'] if channels.get(item['id'], {}).get('enabled', False)]
+    channels = config_section(config, 'platforms')
+    setup['channels'] = [item['id'] for item in catalog['channels'] if config_section(channels, item['id']).get('enabled', False)]
     setup['telegram'] = 'telegram' in setup['channels']
     known_tools = {item['id'] for item in catalog['tools']} - {'stt'}
-    toolsets = config.get('platform_toolsets', {})
+    toolsets = config_section(config, 'platform_toolsets')
     selected = toolsets.get('api_server', toolsets.get('cli', list(known_tools)))
     if not isinstance(selected, list):
         selected = list(known_tools)
-    disabled = set(config.get('agent', {}).get('disabled_toolsets') or [])
+    disabled = set(config_section(config, 'agent').get('disabled_toolsets') or [])
     setup['tools'] = sorted((set(selected) & known_tools) - disabled)
-    stt = config.get('stt', {})
+    stt = config_section(config, 'stt')
     if stt.get('enabled', True):
         setup['tools'].append('stt')
     setup['browser'] = 'browser' in setup['tools']
-    tts = config.get('tts', {})
+    tts = config_section(config, 'tts')
     for key, value, options in [
         ('ttsProvider', tts.get('provider', 'edge'), catalog['ttsProviders']),
         ('sttProvider', stt.get('provider', 'groq'), catalog['sttProviders']),
@@ -132,13 +158,13 @@ def read_settings(fallback, catalog, config_api):
             setup[key] = value
         else:
             warnings.append('A voice provider is outside this catalog. It is preserved unless you edit services.')
-    voice = tts.get(setup['ttsProvider'], {})
+    voice = config_section(tts, setup['ttsProvider'])
     setup['ttsVoice'] = str(voice.get('voice_id', voice.get('voice', '')))
-    web = config.get('web', {})
+    web = config_section(config, 'web')
     for key, value, options in [
         ('searchBackend', web.get('search_backend', 'ddgs'), {'ddgs', 'brave-free'}),
         ('extractBackend', web.get('extract_backend', 'builtin'), {'builtin', 'companion-parser', 'firecrawl'}),
-        ('imageProvider', config.get('image_gen', {}).get('provider', 'fal'), {'fal', 'replicate', 'openai'}),
+        ('imageProvider', config_section(config, 'image_gen').get('provider', 'fal'), {'fal', 'replicate', 'openai'}),
     ]:
         if value in options:
             setup[key] = 'builtin' if value == 'companion-parser' else value
@@ -304,7 +330,9 @@ def configure(payload, catalog, config_api, plugin_sources=None):
         config_api.save_env_value(name, value)
 
     if 'model' in sections:
-        model = config.setdefault('model', {})
+        if isinstance(config.get('model'), str):
+            config['model'] = {'default': config['model']}
+        model = config_section(config, 'model', create=True)
         for name in ['base_url', 'api_mode', 'api_key', 'key_env', 'api_key_env']:
             model.pop(name, None)
         if deferred:
@@ -326,28 +354,28 @@ def configure(payload, catalog, config_api, plugin_sources=None):
             model['api_mode'] = setup['apiMode']
         if not deferred and provider['id'] == 'custom' and merged_env.get(custom_key):
             model['api_key'] = '${' + custom_key + '}'
-    config.setdefault('gateway', {})['allow_all_users'] = False
+    config_section(config, 'gateway', create=True)['allow_all_users'] = False
     if not payload.get('sections'):
         config['max_live_sessions'] = 2
-    platforms = config.setdefault('platforms', {})
+    platforms = config_section(config, 'platforms', create=True)
     if 'channels' in sections:
         for channel in catalog['channels']:
-            platforms.setdefault(channel['id'], {})['enabled'] = channel['id'] in selected_channels
-    platforms.setdefault('api_server', {}).update(enabled=True, host='127.0.0.1', port=8642)
+            config_section(platforms, channel['id'], create=True)['enabled'] = channel['id'] in selected_channels
+    config_section(platforms, 'api_server', create=True).update(enabled=True, host='127.0.0.1', port=8642)
     if 'tools' in sections or 'channels' in sections:
         all_tools = {item['id'] for item in catalog['tools']} - {'stt'}
         selected_tools = set(setup['tools']) - {'stt'}
-        previous_disabled = set(config.setdefault('agent', {}).get('disabled_toolsets') or [])
+        previous_disabled = set(config_section(config, 'agent', create=True).get('disabled_toolsets') or [])
         config['agent']['disabled_toolsets'] = sorted((previous_disabled - all_tools) | (all_tools - selected_tools))
         for platform in ['cli', 'api_server', *selected_channels]:
-            existing_tools = config.setdefault('platform_toolsets', {}).get(platform, [])
+            existing_tools = config_section(config, 'platform_toolsets', create=True).get(platform, [])
             unknown_tools = set(existing_tools) - all_tools if isinstance(existing_tools, list) else set()
             config['platform_toolsets'][platform] = sorted(selected_tools | unknown_tools)
-            config.setdefault('known_builtin_toolsets', {})[platform] = sorted(all_tools)
+            config_section(config, 'known_builtin_toolsets', create=True)[platform] = sorted(all_tools)
     if 'services' in sections:
-        tts = config.setdefault('tts', {})
+        tts = config_section(config, 'tts', create=True)
         tts['provider'] = 'openai' if setup['ttsProvider'] == 'nous' else setup['ttsProvider']
-        tts.setdefault(tts['provider'], {})
+        config_section(tts, tts['provider'], create=True)
         voice_key = 'voice_id' if tts['provider'] in {'elevenlabs', 'xai', 'minimax', 'mistral'} else 'voice'
         if setup.get('ttsVoice'):
             tts[tts['provider']][voice_key] = setup['ttsVoice']
@@ -356,17 +384,22 @@ def configure(payload, catalog, config_api, plugin_sources=None):
         if setup['ttsProvider'] == 'nous':
             from hermes_cli.nous_subscription import apply_gateway_defaults
             apply_gateway_defaults(config, ['tts'])
-        config.setdefault('stt', {}).update(enabled='stt' in setup['tools'], provider=setup['sttProvider'])
+        config_section(config, 'stt', create=True).update(enabled='stt' in setup['tools'], provider=setup['sttProvider'])
         if setup.get('searchBackend'):
-            config.setdefault('web', {})['search_backend'] = setup['searchBackend']
+            config_section(config, 'web', create=True)['search_backend'] = setup['searchBackend']
         if setup.get('extractBackend'):
-            config.setdefault('web', {})['extract_backend'] = 'companion-parser' if setup['extractBackend'] == 'builtin' else setup['extractBackend']
+            config_section(config, 'web', create=True)['extract_backend'] = 'companion-parser' if setup['extractBackend'] == 'builtin' else setup['extractBackend']
         if 'image_gen' in setup['tools']:
-            config.setdefault('image_gen', {})['provider'] = setup.get('imageProvider', 'fal')
+            config_section(config, 'image_gen', create=True)['provider'] = setup.get('imageProvider', 'fal')
     if 'tools' in sections:
-        config.setdefault('stt', {})['enabled'] = 'stt' in setup['tools']
+        config_section(config, 'stt', create=True)['enabled'] = 'stt' in setup['tools']
     if plugin_sources and ('services' in sections or 'tools' in sections):
-        enabled = config.setdefault('plugins', {}).setdefault('enabled', [])
+        plugins = config_section(config, 'plugins', create=True)
+        if plugins.get('enabled') is None:
+            plugins['enabled'] = []
+        enabled = plugins['enabled']
+        if not isinstance(enabled, list):
+            raise ValueError('The plugins enabled setting must contain a YAML list.')
         for kind, name, key, needed in [
             ('web', 'web-companion-parser', 'parser', setup.get('extractBackend') == 'builtin'),
             ('image_gen', 'companion-replicate', 'replicate', 'image_gen' in setup['tools'] and setup.get('imageProvider') == 'replicate'),
@@ -403,9 +436,9 @@ def configure(payload, catalog, config_api, plugin_sources=None):
 
 
 if __name__ == '__main__':
-    from hermes_cli import config as config_api
-    data = json.load(sys.stdin)
     try:
+        from hermes_cli import config as config_api
+        data = json.load(sys.stdin)
         if data.get('action') == 'read':
             print(json.dumps(read_settings(data['setup'], data['catalog'], config_api)))
         else:
@@ -417,6 +450,6 @@ if __name__ == '__main__':
         else:
             print(json.dumps({'error': 'Invalid configuration or account file.'}))
         sys.exit(1)
-    except Exception:
-        print(json.dumps({'error': 'The installed Hermes configuration writer failed. Check compatibility with the installed release.'}))
+    except Exception as error:
+        print(json.dumps(configuration_error(error)))
         sys.exit(1)

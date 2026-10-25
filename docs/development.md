@@ -36,6 +36,14 @@ python -m unittest discover -s tests -p '*_test.py'
 
 The Python boundary tests run on Linux: the private configuration and OAuth adapters use POSIX APIs because they execute on the VPS. They are not Windows desktop dependencies. Rust SSH integration tests create an in-process loopback server; normal tests do not contact the real VPS or use `.env`.
 
+To check compatibility with a real Hermes release, use a separate trusted checkout and a Python environment with its configuration module dependencies:
+
+```bash
+HERMES_NATIVE_CHECKOUT=/path/to/hermes-agent python3 -m unittest discover -s tests -p 'configuration_native_test.py' -v
+```
+
+This opt-in test seeds the official installer template and exercises native configuration write/read in a temporary profile. It checks a clean installation without model or Telegram credentials, loopback API configuration and the parser plugin. It does not install packages, start a gateway or contact the VPS. Normal test runs skip it when no checkout is provided.
+
 `npm run check:release` verifies matching versions, private/generated file exclusions, required files remaining trackable, tracked ignored files and local documentation links. `RELEASE_TAG=v0.1.0` can additionally validate the expected tag. Never run `git add -f` on private credentials to pass an ignore check.
 
 ## GUI tests

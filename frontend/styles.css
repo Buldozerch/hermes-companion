@@ -511,6 +511,56 @@
   display: inline;
   margin-right: 0.5rem;
 }
+.deployment-stage {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.deployment-stage svg {
+  width: 1rem;
+  height: 1rem;
+}
+.deployment-stage-count {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--muted-foreground);
+  font: 0.625rem var(--font-mono);
+}
+.deployment-timing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin-block: 0.75rem;
+}
+.deployment-timing dt,
+.deployment-output-heading span,
+.deployment-activity > p {
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+  line-height: 1.6;
+}
+.deployment-timing dd {
+  font: 0.8125rem var(--font-mono);
+  margin-top: 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+.deployment-output-heading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  margin-top: 0.75rem;
+}
+.deployment-log.live-output {
+  max-height: 12rem;
+  margin-block: 0.5rem 1rem;
+}
+.nav-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .deployment-progress [role="progressbar"] {
   height: 0.1875rem;
   background: var(--border);
@@ -2444,6 +2494,8 @@
 }
 .spin {
   animation: spin 1s linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 @keyframes spin {
   to {

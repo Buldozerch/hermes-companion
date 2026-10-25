@@ -45,6 +45,47 @@ def credentials(data, **values):
 
 
 class ConfigurationTest(unittest.TestCase):
+    def test_empty_native_yaml_sections_are_initialized_without_losing_other_options(self):
+        # Hermes v0.22.5 seeds gateway: with comments only, which YAML reads as None.
+        store = ConfigStore({name: None for name in ['gateway', 'platforms', 'agent', 'platform_toolsets', 'known_builtin_toolsets', 'tts', 'stt', 'web', 'image_gen']})
+        store.config.update(model={'provider': 'auto', 'default': 'native-default'}, plugins={'enabled': None, 'clone_timeout_seconds': 300}, untouched=None)
+        data = payload(deferModelSetup=True, model='', searchBackend='ddgs', extractBackend='builtin', tools=['terminal', 'file', 'memory', 'web', 'browser', 'tts'])
+        with tempfile.TemporaryDirectory() as temporary, patch('pathlib.Path.home', return_value=Path(temporary)):
+            configure(data, catalog, store, {'parser': '# parser', 'replicate': '# replicate'})
+        self.assertFalse(store.config['gateway']['allow_all_users'])
+        self.assertTrue(store.config['platforms']['api_server']['enabled'])
+        self.assertEqual(store.config['plugins']['enabled'], ['web-companion-parser'])
+        self.assertEqual(store.config['plugins']['clone_timeout_seconds'], 300)
+        self.assertIsNone(store.config['untouched'])
+        self.assertFalse(read_settings(data['setup'], catalog, store)['modelConfigured'])
+
+    def test_reading_empty_native_sections_preserves_the_revision(self):
+        store = ConfigStore({name: None for name in ['model', 'platforms', 'platform_toolsets', 'agent', 'tts', 'stt', 'web', 'image_gen']})
+        before = copy.deepcopy(store.config)
+        result = read_settings(payload(deferModelSetup=True, model='')['setup'], catalog, store)
+        self.assertFalse(result['modelConfigured'])
+        self.assertEqual(result['revision'], helper['settings_revision'](before, {}))
+        self.assertEqual(store.config, before)
+
+    def test_diagnostic_reports_type_and_location_without_private_exception_content(self):
+        try:
+            raise TypeError('private-api-key-or-account-data')
+        except TypeError as error:
+            result = helper['configuration_error'](error)
+        self.assertIn('TypeError', result['error'])
+        self.assertNotIn('private-api-key', result['error'])
+
+    def test_diagnostics_work_under_the_native_python_c_launcher_without_file(self):
+        namespace = {'__name__': 'test_native_launcher'}
+        exec(compile(Path('src/scripts/configure-user.py').read_text(), '<string>', 'exec'), namespace)
+        try:
+            exec(compile("raise TypeError('private-launcher-data')", '<string>', 'exec'), {})
+        except TypeError as error:
+            result = namespace['configuration_error'](error)
+        self.assertIn('configure-user.py:1', result['error'])
+        self.assertIn('TypeError', result['error'])
+        self.assertNotIn('private-launcher-data', result['error'])
+
     def test_deferred_model_needs_no_fake_key_and_does_not_write_openrouter_defaults(self):
         store = ConfigStore({'provider': 'openrouter', 'model': {'provider': 'openrouter', 'default': 'anthropic/claude-sonnet-4.6', 'name': 'legacy-model'}})
         data = payload(deferModelSetup=True, model='')

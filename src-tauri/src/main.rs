@@ -210,7 +210,7 @@ async fn read_server_settings(
     let session = connected_session(&state, &server_id).await?;
     let server = state.database.server(&server_id)?;
     let status = deployment::status(&session).await?;
-    if !status.managed || status.installed_version.is_none() {
+    if !status.managed || status.installed_version.is_none() || !status.service_installed {
         return Err(AppError::new(
             "notInstalled",
             "Install Hermes before editing server settings.",

@@ -13,6 +13,10 @@ esac
 JOB="$ROOT/jobs/$JOB_ID"
 printf 'job_id=%s\n' "$JOB_ID"
 if [ -r "$JOB/state" ]; then cat "$JOB/state"; else printf 'state=starting\n'; fi
+printf 'checked_at=%s\n' "$(date +%s)"
+if [ -f "$JOB/installer.log" ]; then
+    printf 'output_updated_at=%s\n' "$(stat -c %Y "$JOB/installer.log")"
+fi
 if [ -r "$JOB/state" ] && grep -Eq '^state=(running|starting)$' "$JOB/state" && \
     ! systemctl is-active --quiet hermes-companion-install.service; then
     printf 'state=interrupted\n'

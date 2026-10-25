@@ -45,6 +45,7 @@ import type {
 import { Busy, Notice, StepFocus, TrustNote } from "./shared";
 import { ServerPurchaseStep } from "./server-purchase";
 import { DeploymentPanel } from "./deployment-panel";
+import { hermesInstalled } from "@/lib/managed-settings";
 
 const steps = [
   { title: "Buy a VPS", description: "Choose a hosting provider and server", icon: Cloud },
@@ -375,7 +376,11 @@ function ConnectionStep({
             <CircleCheck />
             <div>
               <h3>{t("Connection established")}</h3>
-              <p>{t("The server is reachable. You can continue to Hermes settings.")}</p>
+              <p>
+                {t(
+                  "The server is reachable. Install Hermes, then connect your model and services.",
+                )}
+              </p>
             </div>
           </div>
           {(report || server.report) && <ServerInspection report={(report || server.report)!} />}
@@ -614,7 +619,7 @@ function ReviewStep({
   const [plan, setPlan] = useState<DeploymentPlan | null>(null);
   const [error, setError] = useState<unknown>(null);
   const running = status?.state === "running" || status?.state === "starting";
-  const installed = !!status?.managed && !!status.installedVersion;
+  const installed = hermesInstalled(status);
   useEffect(() => {
     let active = true;
     api

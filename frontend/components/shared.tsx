@@ -21,7 +21,7 @@ export function BrandMark({ small = false }: { small?: boolean }) {
 export function Busy({ children }: { children: ReactNode }) {
   return (
     <>
-      <LoaderCircle data-icon="inline-start" className="spin" />
+      <LoaderCircle data-icon="inline-start" className="spin" aria-hidden="true" />
       {children}
     </>
   );
