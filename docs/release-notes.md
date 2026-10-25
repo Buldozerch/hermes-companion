@@ -1,14 +1,14 @@
-Hermes Companion 0.1.2 separates installation from configuration and adds updates for both the desktop app and Hermes Agent.
+Hermes Companion 0.1.3 fixes macOS release packaging for Apple Silicon and Intel.
 
-- Install a clean Hermes service before choosing any provider or messenger. No model API key or Telegram bot token is required, including when opening an older setup draft.
-- Continue to model, channel, tool and service settings after installation. Existing connection validation remains active when applying selected integrations.
-- Companion checks published releases, including previews, and offers signed download/install/restart updates. Existing 0.1.0/0.1.1 users must install 0.1.2 manually once.
-- Hermes Agent updates use the native stable-channel updater in a durable server job. A private pre-update backup is created, existing connections and the system service definition are preserved, and failures attempt to restart the service.
-- Added EN/RU progress, update status and retry controls. Unsaved server settings block server upgrades until saved or discarded.
+- Explicitly build both the macOS application bundle and DMG installer, so signed `.app.tar.gz` updater archives are generated and collected alongside the DMGs.
+- Add a regression check for the macOS bundle configuration and reproduce the failed DMG-only artifact list for both CPU architectures.
+- Report the exact missing artifact and required bundle targets when collecting an incomplete release.
+
+Clean installation without model keys or Telegram tokens, post-install configuration, signed Companion updates and stable Hermes Agent upgrades from 0.1.2 remain included. Users of 0.1.0/0.1.1 must install the new version manually once.
 
 Packages target Linux x86_64 (DEB and AppImage), Windows x86_64 (NSIS EXE), macOS Apple Silicon and Intel (separate DMGs). Match the architecture before installing and verify the accompanying SHA-256 checksum.
 
-Validation includes frontend and Rust tests, Python configuration/auth/model tests, isolated shell upgrade jobs for success/failure, signed update-manifest assembly, public release discovery and browser UI checks with mocked desktop IPC. A fresh VPS installation/real upgrade, full application replacement/restart, Windows/macOS GUI behavior and real account approval remain manual release checks. Successful CI builds verify compilation and automated checks, not those manual scenarios.
+Packaging regression checks pass locally, including signed update-manifest assembly and the DMG-only failure scenario for both Mac architectures. Native macOS artifact generation must be confirmed by the 0.1.3 CI run. A fresh VPS installation/real upgrade, full application replacement/restart, Windows/macOS GUI behavior and real account approval remain manual release checks. Successful CI builds verify compilation and automated checks, not those manual scenarios.
 
 These are preview packages. Update artifacts use Tauri signatures; Windows installers still have no OS publisher certificate, and macOS packages use ad-hoc signing without notarization. Remote installation currently requires Ubuntu 24.04 LTS with systemd.
 

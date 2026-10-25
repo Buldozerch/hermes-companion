@@ -59,8 +59,15 @@ export function collectRelease(platform, artifacts, outputRoot = resolve(project
       throw new Error("More than one installer matches the same platform and format.");
     files.set(extension, source);
   }
-  if (extensions.some((extension) => !files.has(extension)))
-    throw new Error("The build is missing a required installer format.");
+  const missing = extensions.filter((extension) => !files.has(extension));
+  if (missing.length) {
+    const hint = missing.includes(".app.tar.gz")
+      ? ' Configure macOS bundle.targets with both "app" and "dmg" to generate the updater archive.'
+      : "";
+    throw new Error(
+      `The build is missing required release files for ${platform}: ${missing.join(", ")}.${hint}`,
+    );
+  }
   const destination = resolve(outputRoot, platform);
   mkdirSync(destination, { recursive: true });
   const sums = [];

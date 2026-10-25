@@ -14,6 +14,17 @@ import { spawnSync } from "node:child_process";
 import { collectRelease } from "./collect-release.mjs";
 import { assembleUpdate } from "./assemble-update.mjs";
 
+test("macOS requests both the application update bundle and DMG installer", () => {
+  const config = JSON.parse(readFileSync("src-tauri/tauri.macos.conf.json", "utf8"));
+  const root = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8"));
+  assert.equal(root.bundle.createUpdaterArtifacts, true);
+  assert.ok(
+    config.bundle.targets.includes("app"),
+    "The app target is required for .app.tar.gz updater generation.",
+  );
+  assert.ok(config.bundle.targets.includes("dmg"), "The DMG installer must still be built.");
+});
+
 test("signed packages assemble a complete manifest and reject mismatched versions", () => {
   mkdirSync("target", { recursive: true });
   const directory = mkdtempSync(resolve("target/release-test-"));
@@ -45,6 +56,13 @@ test("signed packages assemble a complete manifest and reject mismatched version
         writeFileSync(path, "Disposable updater artifact " + platform + extension);
         return path;
       });
+      if (platform.startsWith("macos-")) {
+        // Reproduce the failed Action output: only the DMG existed with targets=["dmg"].
+        assert.throws(
+          () => collectRelease(platform, [files[0]], output),
+          /missing required release files.*\.app\.tar\.gz.*"app" and "dmg"/,
+        );
+      }
       collectRelease(platform, files, output);
     }
     // Simulate Actions download-artifact with merge-multiple enabled.
