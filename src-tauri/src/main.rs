@@ -83,6 +83,16 @@ async fn connect_server(
     let server = state.database.server(&server_id)?;
     let session = SshSession::connect(&server, &credentials, &state.database).await?;
     let report = session.inspect().await?;
+    if report.has_systemd {
+        let pending = session.script("sh -s", b"if systemctl is-active --quiet hermes-companion-reboot.timer 2>/dev/null; then printf 'pending\\n'; else printf 'ready\\n'; fi\n").await?;
+        if pending.trim() == "pending" {
+            session.close().await;
+            return Err(AppError::new(
+                "rebootPending",
+                "The server reboot is scheduled. Wait for the server to restart before reconnecting.",
+            ));
+        }
+    }
     state.database.save_report(&server_id, &report)?;
     state.database.record(
         Some(&server_id),
@@ -230,6 +240,21 @@ async fn apply_server_settings(
 }
 
 #[tauri::command]
+async fn reboot_server(server_id: String, state: State<'_, AppState>) -> Result<()> {
+    let session = connected_session(&state, &server_id).await?;
+    deployment::reboot_server(&session).await?;
+    state.sessions.lock().await.remove(&server_id);
+    let _ = state.database.record(
+        Some(&server_id),
+        "Server reboot requested",
+        "A server reboot was scheduled. SSH was disconnected; reconnect after the server starts.",
+        "info",
+    );
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), session.close()).await;
+    Ok(())
+}
+
+#[tauri::command]
 async fn manage_service(
     server_id: String,
     action: String,
@@ -372,6 +397,7 @@ fn main() {
             updater::check_companion_update,
             updater::install_companion_update,
             manage_service,
+            reboot_server,
             get_remote_logs
         ])
         .build(tauri::generate_context!());

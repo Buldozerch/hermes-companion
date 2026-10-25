@@ -1,7 +1,7 @@
 import { LanguageSwitcher, useLocale } from "@/components/locale-provider";
 import { version as appVersion } from "../package.json";
 import { englishMessage } from "@/lib/i18n";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity as ActivityIcon,
   ArrowRight,
@@ -63,6 +63,8 @@ export default function App() {
   const [workspace, setWorkspace] = useState<Workspace>({ servers: [], activity: [] });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [connectedIds, setConnectedIds] = useState<string[]>([]);
+  const [rebootingIds, setRebootingIds] = useState<string[]>([]);
+  const rebooting = useRef(new Set<string>());
   const [deployments, setDeployments] = useState<Record<string, DeploymentStatus>>({});
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -102,8 +104,9 @@ export default function App() {
         .connections()
         .then((ids) => {
           if (active) {
-            setConnectedIds(ids);
-            for (const id of ids)
+            const connected = ids.filter((id) => !rebooting.current.has(id));
+            setConnectedIds(connected);
+            for (const id of connected)
               void api
                 .deployment(id)
                 .then((status) => {
@@ -175,6 +178,10 @@ export default function App() {
     setStep(2);
   }
   async function connected(_report: ServerReport) {
+    if (selectedId) {
+      rebooting.current.delete(selectedId);
+      setRebootingIds((ids) => ids.filter((id) => id !== selectedId));
+    }
     if (selectedId) setConnectedIds((ids) => [...new Set([...ids, selectedId])]);
     await refresh();
     if (selectedId && desktop) {
@@ -183,6 +190,12 @@ export default function App() {
       if (status.managed && status.installedVersion) navigate("settings");
       else if (status.state === "running" || status.state === "starting") setStep(3);
     }
+  }
+
+  function rebootRequested(serverId: string) {
+    rebooting.current.add(serverId);
+    setRebootingIds((ids) => [...new Set([...ids, serverId])]);
+    setConnectedIds((ids) => ids.filter((id) => id !== serverId));
   }
 
   return (
@@ -327,6 +340,21 @@ export default function App() {
               </Button>
             </div>
           )}
+          {workspace.servers
+            .filter((server) => rebootingIds.includes(server.id))
+            .map((server) => (
+              <Notice key={server.id} title="Server reboot requested">
+                <p>
+                  {server.name}:{" "}
+                  {t(
+                    "SSH was disconnected after the reboot request. Wait for the server to start, then reconnect.",
+                  )}
+                </p>
+                <Button size="sm" variant="outline" onClick={() => connectionPage(server)}>
+                  {t("Reconnect to server")}
+                </Button>
+              </Notice>
+            ))}
           {loading ? (
             <div className="app-loading" role="status">
               <Busy>{t("Loading workspace\u2026")}</Busy>
@@ -356,6 +384,9 @@ export default function App() {
                   onConfigure={() => {
                     void refresh();
                     navigate("settings");
+                  }}
+                  onReboot={() => {
+                    if (selected) rebootRequested(selected.id);
                   }}
                   onBack={() => navigate("overview")}
                 />
@@ -456,6 +487,7 @@ export default function App() {
                                 [(selected ?? workspace.servers[0]).id]: status,
                               }))
                             }
+                            onReboot={() => rebootRequested((selected ?? workspace.servers[0]).id)}
                           />
                         ) : (
                           <ModelSettings

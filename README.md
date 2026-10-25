@@ -54,7 +54,7 @@ The app includes links to [VDSina](https://www.vdsina.com/?partner=62n73usqa1jp)
 | Channels        | Telegram-first setup and an advanced catalog of other Hermes channels, including Discord and Slack                                               |
 | Tools           | Terminal, code, files, memory and web tools enabled by default, with optional exclusions                                                         |
 | Services        | TTS, transcription, search, page extraction and optional image generation, including free options without API keys                               |
-| Operations      | Reconnectable installation progress, start/stop/restart, diagnostic logs and separate settings sections                                          |
+| Operations      | Reconnectable installation progress, service controls, VPS reboot when required, diagnostic logs and separate settings sections                  |
 | Updates         | Signed Companion updates with restart; stable Hermes upgrades on the VPS with a private backup and preserved connections                         |
 | Interface       | Compact monochrome layout and persistent English/Russian switching; technical errors and logs stay in English                                    |
 

@@ -33,8 +33,17 @@
         case "load_workspace": return structuredClone(state.workspace);
         case "connected_servers": return state.connected ? [server.id] : [];
         case "probe_host": return { fingerprint: "SHA256:qa-fixture", algorithm: "ssh-ed25519", status: "trusted", previousFingerprint: "SHA256:qa-fixture" };
-        case "connect_server": state.connected = true; return structuredClone(report);
+        case "connect_server":
+          if (state.rebootPending) throw {code:"rebootPending",message:"The server reboot is scheduled. Wait for the server to restart before reconnecting."};
+          state.connected = true; return structuredClone(report);
         case "disconnect_server": state.connected = false; return;
+        case "reboot_server":
+          if (state.rebootError) throw {code:"reboot",message:"Could not schedule the server reboot. Check root or passwordless sudo access and systemd."};
+          state.rebootCalls=(state.rebootCalls??0)+1;
+          state.connected=false;
+          state.rebootPending=true;
+          state.job.rebootRequired=false;
+          return;
         case "save_setup": Object.assign(server.setup, args.setup); return;
         case "get_plan": return { ready: true, blockers: [], warnings: ["Less than 8 GB of disk space is available. Installation may run out of space."], steps: [{ id: "install", title: "Install Hermes Agent", description: "Use the official installer and stable release channel." }] };
         case "get_deployment": return structuredClone(state.job);

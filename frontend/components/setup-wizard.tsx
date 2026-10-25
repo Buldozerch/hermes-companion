@@ -62,6 +62,7 @@ interface WizardProps {
   onConnected: (report: ServerReport) => Promise<void>;
   status?: DeploymentStatus;
   onConfigure: () => void;
+  onReboot: () => void;
   onBack: () => void;
 }
 
@@ -74,6 +75,7 @@ export function SetupWizard({
   onConnected,
   status,
   onConfigure,
+  onReboot,
   onBack,
 }: WizardProps) {
   const { t } = useLocale();
@@ -132,6 +134,7 @@ export function SetupWizard({
               connected={connected}
               status={status}
               onConfigure={onConfigure}
+              onReboot={onReboot}
             />
           )}
         </section>
@@ -599,11 +602,13 @@ function ReviewStep({
   connected,
   status,
   onConfigure,
+  onReboot,
 }: {
   server: Server;
   connected: boolean;
   status?: DeploymentStatus;
   onConfigure: () => void;
+  onReboot: () => void;
 }) {
   const { t } = useLocale();
   const [plan, setPlan] = useState<DeploymentPlan | null>(null);
@@ -686,6 +691,7 @@ function ReviewStep({
         allowInstall
         blockers={plan?.blockers ?? ["Check the server connection first."]}
         showProviderSignIn={false}
+        onReboot={onReboot}
       />
       {installed && !running && status?.apiHealthy && (
         <Notice title="Hermes is ready to configure">

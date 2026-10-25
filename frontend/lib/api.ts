@@ -191,6 +191,8 @@ export const api = {
       : Promise.reject(desktopRequiredError()),
   remoteLogs: (serverId: string): Promise<string> =>
     desktop ? invoke("get_remote_logs", { serverId }) : Promise.reject(desktopRequiredError()),
+  rebootServer: (serverId: string): Promise<void> =>
+    desktop ? invoke("reboot_server", { serverId }) : Promise.reject(desktopRequiredError()),
   discoverModels: (
     serverId: string,
     setup: SetupOptions,

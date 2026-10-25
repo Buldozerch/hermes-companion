@@ -341,7 +341,6 @@
   "Progress updates automatically. Installation continues on the server if you close this app.": "Прогресс обновляется автоматически. Если закрыть приложение, установка продолжится на сервере.",
   "Hermes is installed. Service health and model credentials are shown separately above.": "Hermes установлен. Состояние службы и доступ к модели показаны отдельно выше.",
   "Reboot required": "Нужна перезагрузка",
-  "Ubuntu requires a reboot. Installation does not reboot the server automatically.": "Ubuntu требует перезагрузки. Установщик не перезагружает сервер автоматически.",
   "Operation failed": "Не удалось выполнить операцию",
   "Model provider API key": "API-ключ провайдера модели",
   "Optional for installation. Required for model responses. Stored only on your server.": "Необязателен для установки, нужен для ответов модели. Сохраняется только на вашем сервере.",
@@ -928,5 +927,11 @@
   "Hermes update failed": "Обновление Hermes завершилось ошибкой",
   "Hermes update interrupted": "Обновление Hermes прервано",
   "Create a private backup": "Создать приватную резервную копию",
-  "Hermes is updated. Your configuration and connections were preserved.": "Hermes обновлён. Настройки и подключения сохранены."
+  "Hermes is updated. Your configuration and connections were preserved.": "Hermes обновлён. Настройки и подключения сохранены.",
+  "Ubuntu requires a reboot. Rebooting restarts the entire VPS and disconnects SSH briefly.": "Ubuntu требует перезагрузки. Будет перезагружен весь VPS, а SSH ненадолго отключится.",
+  "Save or discard your settings before rebooting.": "Перед перезагрузкой сохраните или отмените изменения настроек.",
+  "Reboot server": "Перезагрузить сервер",
+  "Server reboot requested": "Запрошена перезагрузка сервера",
+  "Reconnect to server": "Подключиться снова",
+  "SSH was disconnected after the reboot request. Wait for the server to start, then reconnect.": "После запроса перезагрузки SSH отключён. Дождитесь запуска сервера и подключитесь снова."
 }

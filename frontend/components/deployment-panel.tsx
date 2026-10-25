@@ -2,7 +2,7 @@ import { useSetupCredentials } from "@/components/setup-credentials";
 import { ProviderSignIn } from "@/components/provider-sign-in";
 import { usesBrowserAuth } from "@/lib/setup-catalog";
 import { useEffect, useRef, useState } from "react";
-import { Check, Download, FileText, Play, RotateCw, Square, Terminal } from "lucide-react";
+import { Check, Download, FileText, Play, Power, RotateCw, Square, Terminal } from "lucide-react";
 import { useLocale } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,8 @@ export function DeploymentPanel({
   blockers = [],
   showProviderSignIn = true,
   title = "Hermes installation",
+  onReboot,
+  hasUnsavedChanges = false,
 }: {
   server: Server;
   connected: boolean;
@@ -45,6 +47,8 @@ export function DeploymentPanel({
   blockers?: string[];
   showProviderSignIn?: boolean;
   title?: string;
+  onReboot?: () => void;
+  hasUnsavedChanges?: boolean;
 }) {
   const { t } = useLocale();
   const credentials = useSetupCredentials(server.id);
@@ -52,10 +56,11 @@ export function DeploymentPanel({
   const [error, setError] = useState<unknown>(null);
   const [syncError, setSyncError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [rebooting, setRebooting] = useState(false);
   const [logs, setLogs] = useState<string | null>(null);
   const request = useRef(0);
   useEffect(() => {
-    if (!connected || !desktop) return;
+    if (!connected || !desktop || rebooting) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
@@ -81,7 +86,7 @@ export function DeploymentPanel({
       clearTimeout(timer);
       request.current++;
     };
-  }, [connected, server.id]);
+  }, [connected, server.id, rebooting]);
   const installing = status?.state === "running" || status?.state === "starting";
   const preparing = status?.operation === "provider";
   const updating = status?.operation === "update";
@@ -233,7 +238,38 @@ export function DeploymentPanel({
         )}
       {status?.rebootRequired && (
         <Notice title="Reboot required">
-          {t("Ubuntu requires a reboot. Installation does not reboot the server automatically.")}
+          <p>
+            {t(
+              "Ubuntu requires a reboot. Rebooting restarts the entire VPS and disconnects SSH briefly.",
+            )}
+          </p>
+          {hasUnsavedChanges && <p>{t("Save or discard your settings before rebooting.")}</p>}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={
+              !desktop || !connected || busy || installing || hasUnsavedChanges || !onReboot
+            }
+            onClick={async () => {
+              setBusy(true);
+              setRebooting(true);
+              setError(null);
+              setSyncError(null);
+              request.current++;
+              try {
+                await api.rebootServer(server.id);
+                onReboot?.();
+              } catch (error) {
+                setError(error);
+              } finally {
+                setBusy(false);
+                setRebooting(false);
+              }
+            }}
+          >
+            <Power data-icon="inline-start" />
+            {t("Reboot server")}
+          </Button>
         </Notice>
       )}
       {!!visibleError && (

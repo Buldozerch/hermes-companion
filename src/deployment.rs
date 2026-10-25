@@ -361,7 +361,7 @@ pub(crate) async fn launch(
 ) -> Result<DeploymentStatus> {
     let id = Uuid::new_v4().to_string();
     let mut script = Zeroizing::new(format!(
-        "set -eu\numask 077\nROOT=/var/lib/hermes-companion\ninstall -d -m 700 \"$ROOT\" \"$ROOT/jobs\"\nexec 8>\"$ROOT/launch.lock\"\nflock -n 8 || exit 20\nif systemctl is-active --quiet hermes-companion-install.service; then exit 20; fi\nmkdir \"$ROOT/jobs/{id}\"\ncd \"$ROOT/jobs/{id}\"\ntrap 'rm -f input.json' EXIT\n"
+        "set -eu\numask 077\nROOT=/var/lib/hermes-companion\ninstall -d -m 700 \"$ROOT\" \"$ROOT/jobs\"\nexec 8>\"$ROOT/launch.lock\"\nflock -n 8 || exit 20\nif systemctl is-active --quiet hermes-companion-install.service || systemctl is-active --quiet hermes-companion-reboot.timer; then exit 20; fi\nmkdir \"$ROOT/jobs/{id}\"\ncd \"$ROOT/jobs/{id}\"\ntrap 'rm -f input.json' EXIT\n"
     ));
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
@@ -482,6 +482,25 @@ pub async fn service_action(session: &SshSession, action: &str) -> Result<Deploy
     }
     session.script(ROOT_SHELL, command.as_bytes()).await?;
     status(session).await
+}
+
+pub async fn reboot_server(session: &SshSession) -> Result<()> {
+    let response = session.script(ROOT_SHELL, include_bytes!("scripts/reboot-server.sh")).await.map_err(|error| {
+        if error.code == "remoteCommand" {
+            AppError::new("reboot", "Could not schedule the server reboot. Check root or passwordless sudo access and systemd.")
+        } else { error }
+    })?;
+    match response.trim() {
+        "reboot_scheduled" => Ok(()),
+        "busy" => Err(AppError::new(
+            "deploymentBusy",
+            "Wait for the current installation or update to finish before rebooting the server.",
+        )),
+        _ => Err(AppError::new(
+            "reboot",
+            "Could not schedule the server reboot. Check root or passwordless sudo access and systemd.",
+        )),
+    }
 }
 
 #[cfg(test)]

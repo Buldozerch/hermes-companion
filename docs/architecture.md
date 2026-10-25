@@ -121,3 +121,9 @@ Companion uses the Tauri updater with a committed public verification key and ma
 The release workflow signs each package type, including DEB and AppImage separately, and produces the macOS application archives used for replacement. A final job validates all five signed updater targets before assembling the manifest. The draft remains private until the maintainer publishes it.
 
 Hermes upgrades use `operation=update` under the existing server lock. A private profile archive is stored under `/var/lib/hermes-companion/backups/<timestamp>/`. The root-owned managed service is stopped by the job before invoking `hermes update --channel stable --yes --backup --no-gateway-restart` as the unprivileged Hermes user. The job never calls the configuration writer during an update or rewrites the existing system service definition. It restarts the service, checks health and updates version markers after success. Failure preserves the backup and old markers and attempts service recovery; it does not claim automatic rollback of arbitrary native migrations.
+
+## VPS reboot
+
+The reboot-required notice offers a dedicated `reboot_server` operation. A trusted root/passwordless-sudo script takes the launch and installation locks, refuses active server jobs and schedules `/usr/sbin/reboot` through a transient systemd timer after five seconds. Timer accuracy is one second so coalescing cannot add a minute of delay. Repeated scheduling requests are idempotent. New deployment jobs also reject an active reboot timer.
+
+Only an explicit `reboot_scheduled` acknowledgement is accepted as success. The desktop then removes and closes the SSH session, records an English activity event and keeps a reboot-requested notice across navigation. The user reconnects with the existing verified-host flow after boot; SSH secrets are not retained for automatic login. Server settings with unsaved changes block the reboot button.

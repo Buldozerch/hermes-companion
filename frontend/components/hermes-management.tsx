@@ -38,6 +38,7 @@ export function HermesManagement({
   onConnect,
   onSetup,
   onStatus,
+  onReboot,
 }: {
   server: Server;
   connected: boolean;
@@ -45,6 +46,7 @@ export function HermesManagement({
   onConnect: () => void;
   onSetup: () => void;
   onStatus: (status: DeploymentStatus) => void;
+  onReboot: () => void;
 }) {
   const { t } = useLocale();
   const credentials = useSetupCredentials(server.id);
@@ -467,6 +469,8 @@ export function HermesManagement({
               connected={connected}
               showProviderSignIn={false}
               title="Service status"
+              onReboot={onReboot}
+              hasUnsavedChanges={!!changes.count}
             />
           </AccordionContent>
         </AccordionItem>
