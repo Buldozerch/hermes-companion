@@ -4,6 +4,21 @@ export interface ServerDraft {
   port: number;
   username: string;
 }
+
+export interface HermesUpdate {
+  currentVersion: string;
+  latestVersion: string;
+  available: boolean;
+}
+export interface CompanionUpdate extends HermesUpdate {
+  canInstall: boolean;
+  notes: string;
+}
+export interface UpdateProgress {
+  stage: "downloading" | "installing" | "restarting";
+  downloaded: number;
+  total: number | null;
+}
 export interface SetupOptions {
   authMethod: "api_key" | "oauth";
   provider: string;
@@ -82,7 +97,7 @@ export interface DeploymentSecrets {
 export interface DeploymentStatus {
   jobId: string | null;
   state: "none" | "starting" | "running" | "succeeded" | "failed" | "interrupted";
-  operation: "install" | "configure" | "provider";
+  operation: "install" | "configure" | "provider" | "update";
   step: string;
   version: string | null;
   installedVersion: string | null;

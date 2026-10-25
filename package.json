@@ -1,6 +1,6 @@
 {
   "name": "hermes-desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "tauri": "tauri",
     "desktop": "tauri dev",
     "test": "vitest run",
+    "test:release": "node --test scripts/release.test.mjs",
     "format": "prettier --write frontend scripts .github \"src-tauri/tauri*.json\" README.md README.ru.md docs/development.md docs/releases.md docs/release-notes.md vite.config.ts tsconfig.json components.json package.json",
     "format:check": "prettier --check frontend scripts .github \"src-tauri/tauri*.json\" README.md README.ru.md docs/development.md docs/releases.md docs/release-notes.md vite.config.ts tsconfig.json components.json package.json",
     "check:release": "node scripts/check-release.mjs",

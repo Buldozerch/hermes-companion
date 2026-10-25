@@ -10,8 +10,9 @@ STARTED=$(date +%s)
 VERSION=
 COMMIT=
 OPERATION=$(cat operation)
-case "$OPERATION" in install|configure|provider) ;; *) exit 1 ;; esac
+case "$OPERATION" in install|configure|provider|update) ;; *) exit 1 ;; esac
 TEMP_SWAP=no
+UPDATE_STOPPED=no
 SWAP_FILE=$ROOT/install.swap
 exec 9>"$ROOT/install.lock"
 
@@ -38,6 +39,13 @@ failed() {
     rm -f input.json
     state failed || true
     event "Server operation $OPERATION failed during step: $STEP. Review the diagnostic output and retry."
+    if [ "$UPDATE_STOPPED" = yes ]; then
+        if systemctl restart hermes-companion-agent.service >> installer.log 2>&1; then
+            event 'Restarted the Hermes service after the interrupted update. Check live service health before using it.'
+        else
+            event 'The Hermes service could not restart. Review the updater log and private backup before retrying.'
+        fi
+    fi
     exit 1
 }
 trap failed ERR TERM INT
@@ -53,7 +61,28 @@ if [ "$(df -Pm / | awk 'NR==2 {print $4}')" -lt 1024 ]; then
     event 'Free at least 1 GB on the system disk before starting installation.'
     failed
 fi
-if [ "$OPERATION" = install ]; then
+if [ "$OPERATION" = update ]; then
+    test -f "$ROOT/managed"
+    test -x /home/hermes/.local/bin/hermes
+    STEP=backup
+    state running
+    event 'Creating a private configuration and account backup before updating Hermes.'
+    install -d -m 700 "$ROOT/backups/$STARTED"
+    # Back up the profile independently of the native updater; do not archive its source/runtime.
+    tar --exclude='./hermes-agent' --exclude='./cache' --exclude='./logs' --exclude='./sessions' \
+        --exclude='./.venv' -C /home/hermes/.hermes -czf "$ROOT/backups/$STARTED/profile.tar.gz" .
+    STEP=install
+    state running
+    event 'Updating Hermes through its official stable-channel updater.'
+    # Stop the root-owned unit here; the unprivileged native updater cannot control it.
+    UPDATE_STOPPED=yes
+    systemctl stop hermes-companion-agent.service
+    runuser -u hermes -- env HOME=/home/hermes HERMES_HOME=/home/hermes/.hermes \
+        PATH=/home/hermes/.local/bin:/usr/local/bin:/usr/bin:/bin CI=1 \
+        /home/hermes/.local/bin/hermes update --channel stable --yes --backup --no-gateway-restart >> installer.log 2>&1
+    VERSION=$(runuser -u hermes -- git -C /home/hermes/.hermes/hermes-agent describe --tags --exact-match HEAD)
+    COMMIT=$(runuser -u hermes -- git -C /home/hermes/.hermes/hermes-agent rev-parse HEAD)
+elif [ "$OPERATION" = install ]; then
 event 'Preparing Ubuntu packages.'
 if [ "$(cat update-system)" = yes ]; then
     apt-get -o DPkg::Lock::Timeout=180 update >> installer.log 2>&1
@@ -136,7 +165,9 @@ fi
 
 STEP=configure
 state running
-if [ "$OPERATION" = provider ]; then
+if [ "$OPERATION" = update ]; then
+    event 'Preserving existing model, messenger, account and tool settings.'
+elif [ "$OPERATION" = provider ]; then
     event 'Installing the optional Antigravity CLI and Hermes provider plugin.'
     python3 prepare-provider.py >> installer.log 2>&1
 else
@@ -148,6 +179,7 @@ rm -f input.json
 STEP=service
 state running
 event 'Starting the Hermes gateway as an unprivileged system service.'
+if [ "$OPERATION" != update ]; then
 HERMES_UID=$(id -u hermes)
 loginctl enable-linger hermes
 systemctl start "user@$HERMES_UID.service"
@@ -187,7 +219,9 @@ WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
 systemctl enable hermes-companion-agent.service >> installer.log 2>&1
+fi
 systemctl restart hermes-companion-agent.service
+UPDATE_STOPPED=no
 for attempt in $(seq 1 90); do
     if python3 health.py >/dev/null 2>&1 && systemctl is-active --quiet hermes-companion-agent.service; then break; fi
     sleep 2

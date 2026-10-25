@@ -27,6 +27,14 @@ export function checkRelease(tag = process.env.RELEASE_TAG) {
     );
   }
   if (tag && tag !== `v${version}`) throw new Error(`The release tag must be v${version}.`);
+  if (
+    !tauri.bundle.createUpdaterArtifacts ||
+    !tauri.plugins?.updater?.pubkey ||
+    !tauri.plugins.updater.requireSignedVersion
+  )
+    throw new Error(
+      "Release builds must generate signed updater artifacts and enforce signed versions.",
+    );
 
   const privatePaths = [
     ".env",
@@ -39,6 +47,8 @@ export function checkRelease(tag = process.env.RELEASE_TAG) {
     "AuthKey_test.p8",
     "preview.dmg",
     "preview.exe",
+    "preview.app.tar.gz",
+    "preview.deb.sig",
     "profile.sqlite3",
     "tests/__pycache__/test.pyc",
     "node_modules/test",
@@ -46,6 +56,8 @@ export function checkRelease(tag = process.env.RELEASE_TAG) {
     "releases/test.deb",
     "graphify-out/graph.json",
     "local-notes/remote-test-report.md",
+    "local-notes/updater/companion.key",
+    "local-notes/updater/password.txt",
     "docs/screenshots/generated.png",
     "src-tauri/icons/android/test.png",
     "src-tauri/icons/ios/test.png",

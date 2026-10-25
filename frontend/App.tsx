@@ -46,6 +46,7 @@ import type { Page, Server, ServerDraft, ServerReport, Workspace } from "@/lib/t
 import { Overview, ServerGuide, ServerTile } from "@/components/overview";
 import { ModelSettings, SetupWizard } from "@/components/setup-wizard";
 import { HermesManagement } from "@/components/hermes-management";
+import { AppUpdater } from "@/components/app-updater";
 import type { DeploymentStatus } from "@/lib/types";
 import { BrandMark, Busy, ExternalLink, Notice, PageTitle } from "@/components/shared";
 
@@ -144,7 +145,7 @@ export default function App() {
       connectedIds.includes(server.id) &&
       (status?.state === "running" || status?.state === "starting")
     ) {
-      setStep(4);
+      setStep(3);
       navigate("setup");
       return;
     }
@@ -159,7 +160,7 @@ export default function App() {
   function installationPage(server: Server) {
     setSelectedId(server.id);
     const status = deployments[server.id];
-    setStep(status?.state === "running" || status?.state === "starting" ? 4 : 2);
+    setStep(status?.state === "running" || status?.state === "starting" ? 3 : 2);
     navigate("setup");
   }
   function startWithServer() {
@@ -180,7 +181,7 @@ export default function App() {
       const status = await api.deployment(selectedId);
       setDeployments((previous) => ({ ...previous, [selectedId]: status }));
       if (status.managed && status.installedVersion) navigate("settings");
-      else if (status.state === "running" || status.state === "starting") setStep(4);
+      else if (status.state === "running" || status.state === "starting") setStep(3);
     }
   }
 
@@ -292,6 +293,7 @@ export default function App() {
             </span>
           </div>
           <div className="topbar-right">
+            <AppUpdater />
             <LanguageSwitcher />
             <span className="privacy-label">
               <ShieldCheck />
@@ -350,12 +352,10 @@ export default function App() {
                   setStep={setStep}
                   onAdd={add}
                   onConnected={connected}
-                  onSaved={async () => {
-                    await refresh();
-                    if (selectedId && desktop) {
-                      const status = await api.deployment(selectedId);
-                      setDeployments((previous) => ({ ...previous, [selectedId]: status }));
-                    }
+                  status={selectedId ? deployments[selectedId] : undefined}
+                  onConfigure={() => {
+                    void refresh();
+                    navigate("settings");
                   }}
                   onBack={() => navigate("overview")}
                 />

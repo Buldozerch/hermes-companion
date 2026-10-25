@@ -30,172 +30,6 @@ pub struct CredentialValue {
 }
 
 impl DeploymentSecrets {
-    fn require_installation_credentials(&self, setup: &SetupOptions) -> Result<()> {
-        let catalog: serde_json::Value =
-            serde_json::from_str(include_str!("../catalog/hermes-options.json"))?;
-        let value = |name: &str| {
-            self.values
-                .iter()
-                .find(|entry| entry.name == name)
-                .map(|entry| entry.value.trim())
-                .filter(|value| !value.is_empty())
-        };
-        let require = |names: Vec<&str>, label: &str| -> Result<()> {
-            if !names.iter().any(|name| value(name).is_some()) {
-                return Err(AppError::new(
-                    "validation",
-                    format!("Missing required connection setting: {label}."),
-                ));
-            }
-            Ok(())
-        };
-        let provider = catalog["providers"]
-            .as_array()
-            .and_then(|items| {
-                items
-                    .iter()
-                    .chain(
-                        catalog["additionalProviders"]
-                            .as_array()
-                            .into_iter()
-                            .flatten(),
-                    )
-                    .find(|item| item["id"].as_str() == Some(setup.provider.as_str()))
-            })
-            .ok_or_else(|| AppError::new("validation", "Select a supported model provider."))?;
-        if !setup.defer_model_setup
-            && provider["authType"] == "api_key"
-            && setup.auth_method != "oauth"
-            && setup.provider != "lmstudio"
-            && self.api_key.trim().is_empty()
-        {
-            if setup.provider == "custom" {
-                if !setup.allow_unauthenticated_model {
-                    let preset = catalog["compatibleProviders"].as_array().and_then(|items| {
-                        items.iter().find(|item| {
-                            item["id"].as_str() == Some(setup.provider_preset.as_str())
-                        })
-                    });
-                    require(
-                        vec![
-                            "COMPANION_CUSTOM_API_KEY",
-                            preset
-                                .and_then(|item| item["keyVar"].as_str())
-                                .unwrap_or(""),
-                        ],
-                        "model API key",
-                    )?;
-                }
-            } else {
-                require(
-                    provider["keyVars"]
-                        .as_array()
-                        .into_iter()
-                        .flatten()
-                        .filter_map(serde_json::Value::as_str)
-                        .collect(),
-                    "model API key",
-                )?;
-            }
-        }
-        for channel in catalog["channels"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|item| {
-                item["id"]
-                    .as_str()
-                    .is_some_and(|id| setup.channels.iter().any(|selected| selected == id))
-            })
-        {
-            for field in channel["fields"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter(|field| field["required"] == true)
-            {
-                if let Some(name) = field["name"].as_str() {
-                    if name == "TELEGRAM_BOT_TOKEN" && !self.telegram_token.is_empty() {
-                        continue;
-                    }
-                    require(vec![name], name)?;
-                }
-            }
-        }
-        if setup.channels.iter().any(|id| id == "telegram") {
-            let token = value("TELEGRAM_BOT_TOKEN").unwrap_or(self.telegram_token.trim());
-            let valid_token = token.split_once(':').is_some_and(|(id, body)| {
-                !id.is_empty()
-                    && id.bytes().all(|c| c.is_ascii_digit())
-                    && body.len() >= 20
-                    && body
-                        .bytes()
-                        .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
-            });
-            let id = value("TELEGRAM_ALLOWED_USERS").unwrap_or(self.telegram_allowed_users.trim());
-            if !valid_token || id.is_empty() || !id.bytes().all(|c| c.is_ascii_digit()) {
-                return Err(AppError::new(
-                    "validation",
-                    "Enter a valid Telegram bot token and your numeric Telegram user ID.",
-                ));
-            }
-        }
-        for (tool, collection, selected) in [
-            ("tts", "ttsProviders", setup.tts_provider.as_str()),
-            ("stt", "sttProviders", setup.stt_provider.as_str()),
-        ] {
-            if !setup.tools.iter().any(|id| id == tool) {
-                continue;
-            }
-            if let Some(key) = catalog[collection]
-                .as_array()
-                .and_then(|items| {
-                    items
-                        .iter()
-                        .find(|item| item["id"].as_str() == Some(selected))
-                })
-                .and_then(|item| item["keyVar"].as_str())
-                .filter(|key| !key.is_empty())
-            {
-                if key == "XAI_API_KEY" && !setup.defer_model_setup && setup.provider == "xai-oauth"
-                {
-                    continue;
-                }
-                let mut names = vec![key];
-                if key == "VOICE_TOOLS_OPENAI_KEY" {
-                    names.push("OPENAI_API_KEY");
-                }
-                require(
-                    names,
-                    if tool == "tts" {
-                        "speech synthesis API key"
-                    } else {
-                        "speech recognition API key"
-                    },
-                )?;
-            }
-        }
-        if setup.tools.iter().any(|id| id == "web") {
-            if setup.search_backend == "brave-free" {
-                require(vec!["BRAVE_SEARCH_API_KEY"], "Brave Search API key")?;
-            }
-            if setup.extract_backend == "firecrawl" {
-                require(vec!["FIRECRAWL_API_KEY"], "Firecrawl API key")?;
-            }
-        }
-        if setup.tools.iter().any(|id| id == "image_gen") {
-            require(
-                vec![match setup.image_provider.as_str() {
-                    "replicate" => "REPLICATE_API_TOKEN",
-                    "openai" => "OPENAI_API_KEY",
-                    _ => "FAL_KEY",
-                }],
-                "image generation API key",
-            )?;
-        }
-        Ok(())
-    }
-
     pub(crate) fn validate(&self, _setup: &SetupOptions) -> Result<()> {
         if [
             &self.api_key,
@@ -388,27 +222,26 @@ fn upload(script: &mut String, name: &str, content: &[u8]) {
 pub async fn start(
     session: &SshSession,
     server: &Server,
-    secrets: &DeploymentSecrets,
+    _secrets: &DeploymentSecrets,
 ) -> Result<DeploymentStatus> {
-    secrets.validate(&server.setup)?;
-    server.setup.validate()?;
     let previous = status(session).await?;
-    if !previous.managed {
-        secrets.require_installation_credentials(&server.setup)?;
-    }
     if previous.in_progress() {
         return Err(AppError::new(
             "deploymentBusy",
             "An installation is already running on this server.",
         ));
     }
-    if previous.state == JobState::Succeeded {
+    if (previous.managed && previous.installed_version.is_some())
+        || previous.state == JobState::Succeeded
+    {
         return Err(AppError::new(
             "alreadyInstalled",
             "Hermes is already installed. Use the service controls to manage it.",
         ));
     }
     let mut fresh = server.clone();
+    // Installation never consumes integration drafts or credentials from older clients.
+    fresh.setup = SetupOptions::clean_install(server.setup.update_system);
     fresh.report = Some(session.inspect().await?);
     if previous.managed
         && let Some(report) = &mut fresh.report
@@ -419,7 +252,14 @@ pub async fn start(
     if !plan.ready {
         return Err(AppError::new("preflight", plan.blockers.join(" ")));
     }
-    launch(session, server, secrets, "install", None).await
+    launch(
+        session,
+        &fresh,
+        &DeploymentSecrets::default(),
+        "install",
+        None,
+    )
+    .await
 }
 
 pub async fn apply_settings(
@@ -512,7 +352,7 @@ pub async fn prepare_provider(
     .await
 }
 
-async fn launch(
+pub(crate) async fn launch(
     session: &SshSession,
     server: &Server,
     secrets: &DeploymentSecrets,
@@ -648,66 +488,16 @@ pub async fn service_action(session: &SshSession, action: &str) -> Result<Deploy
 mod tests {
     use super::*;
     #[test]
-    fn installation_without_a_model_needs_no_model_credentials() -> Result<()> {
-        let setup = SetupOptions {
-            defer_model_setup: true,
-            model: String::new(),
-            tools: vec!["tts".into(), "web".into()],
-            ..Default::default()
-        };
+    fn clean_installation_does_not_select_any_keyed_connections() -> Result<()> {
+        let setup = SetupOptions::clean_install(false);
         setup.validate()?;
-        DeploymentSecrets::default().require_installation_credentials(&setup)
-    }
-    #[test]
-    fn deferring_the_model_does_not_bypass_selected_service_keys() {
-        let setup = SetupOptions {
-            defer_model_setup: true,
-            model: String::new(),
-            tools: vec!["stt".into()],
-            ..Default::default()
-        };
-        assert!(
-            DeploymentSecrets::default()
-                .require_installation_credentials(&setup)
-                .is_err()
-        );
-    }
-    #[test]
-    fn a_new_installation_requires_the_selected_model_key() {
-        let setup = SetupOptions {
-            tools: Vec::new(),
-            ..Default::default()
-        };
-        assert!(
-            DeploymentSecrets::default()
-                .require_installation_credentials(&setup)
-                .is_err()
-        );
-    }
-    #[test]
-    fn free_voice_search_and_parser_do_not_require_paid_credentials() -> Result<()> {
-        let setup = SetupOptions {
-            provider: "custom".into(),
-            allow_unauthenticated_model: true,
-            base_url: "http://localhost:8000/v1".into(),
-            tools: vec!["tts".into(), "web".into()],
-            ..Default::default()
-        };
-        DeploymentSecrets::default().require_installation_credentials(&setup)
-    }
-    #[test]
-    fn a_telegram_username_cannot_replace_the_numeric_owner_id() {
-        let setup = SetupOptions {
-            provider: "custom".into(),
-            allow_unauthenticated_model: true,
-            channels: vec!["telegram".into()],
-            tools: Vec::new(),
-            ..Default::default()
-        };
-        let mut secrets = DeploymentSecrets::default();
-        secrets.telegram_token = "123456789:AA_test_token_12345678901234567890".into();
-        secrets.telegram_allowed_users = "@username".into();
-        assert!(secrets.require_installation_credentials(&setup).is_err());
+        assert!(setup.defer_model_setup && setup.model.is_empty());
+        assert!(setup.channels.is_empty() && !setup.telegram);
+        assert!(!setup.tools.iter().any(|tool| tool == "stt"));
+        assert!(setup.tools.iter().any(|tool| tool == "terminal"));
+        assert!(setup.tools.iter().any(|tool| tool == "browser"));
+        assert!(!setup.update_system);
+        Ok(())
     }
     #[test]
     fn duplicate_state_records_report_interruption() -> Result<()> {

@@ -52,6 +52,7 @@ python -m venv .venv
 .venv/bin/python tests/hermes_management_ui.py
 .venv/bin/python tests/oauth_ui.py
 .venv/bin/python tests/provider_models_ui.py
+.venv/bin/python tests/updates_ui.py
 ```
 
 On Windows use `.venv\Scripts\python` instead of `.venv/bin/python`. The GUI scripts support `--chromium /path/to/chrome` for an existing browser. Screenshots use synthetic server data. Native WebView differences still need the [manual desktop checks](releases.md#manual-checks).
@@ -99,3 +100,5 @@ English is the default UI language. Source strings are translation keys; Russian
 Tauri chooses the platform app-data directory for identifier `app.hermes.companion`. SQLite contains server addresses, SSH usernames, trusted host fingerprints and non-secret settings. Fingerprints survive profile deletion. SSH passwords/private keys are not persisted; Rust connection credentials are zeroized when dropped. OS credential storage is not implemented.
 
 Provider keys remain on the VPS. OAuth uses native account stores; the Google CLI owns Antigravity credentials. External links open in the system browser. The WebView has no general shell or filesystem permission.
+
+Release artifact tests run with `npm run test:release`. They use a disposable signing key and isolated files under `target/`, never the production key. `cargo test --test releases_network -- --ignored` is an optional read-only check against the two public GitHub release endpoints.

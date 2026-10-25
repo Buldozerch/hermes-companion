@@ -63,10 +63,15 @@ jobs:
         uses: tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1
         with:
           args: --target ${{ matrix.target }} --ci -- --locked
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       - name: Collect installers and checksums
         run: node scripts/collect-release.mjs ${{ matrix.platform }}
         env:
           TAURI_ARTIFACTS: ${{ steps.tauri.outputs.artifactPaths }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: Hermes-Companion-${{ matrix.platform }}
@@ -89,6 +94,11 @@ jobs:
           pattern: Hermes-Companion-*
           path: releases
           merge-multiple: true
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+      - name: Assemble signed update manifest
+        run: node scripts/assemble-update.mjs
       - name: Attach installers to a draft
         env:
           GH_TOKEN: ${{ github.token }}

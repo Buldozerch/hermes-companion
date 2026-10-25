@@ -13,6 +13,11 @@ dist/
 *.msi
 *.exe
 *.app/
+*.app.tar.gz
+*.app.tar.gz.sig
+*.AppImage.sig
+*.deb.sig
+*.exe.sig
 
 # Environment files and private credentials. Commit only the empty template.
 .env

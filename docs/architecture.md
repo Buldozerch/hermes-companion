@@ -16,7 +16,7 @@ SSH host-key discovery happens before authentication. The first key requires GUI
 
 ## Installation
 
-The wizard covers VPS purchase → server details → SSH diagnostics → model and integration choices → plan and installation.
+The wizard covers VPS purchase → server details → SSH diagnostics → clean installation. After the service is healthy, the user opens the independent model, channel, tool and service settings. Installation never consumes integration drafts or credentials from older clients.
 
 Each installation resolves the latest stable official Hermes release. It records the release and its exact commit, downloads that commit's official installer and uses its noninteractive mode. A running operation keeps its resolved commit. A new installation resolves the latest release again.
 
@@ -27,10 +27,10 @@ Installation steps:
 1. Prepare Ubuntu packages and optional system updates.
 2. Create the dedicated, unprivileged `hermes` user.
 3. Run the official source installer for the resolved release and selected browser option.
-4. Merge selected model, channel, tool and voice settings through the installed Hermes configuration library and write private credentials.
+4. Write a clean profile through the installed Hermes configuration library: no model, no messaging channels and no keyed services. Core tools and free backends remain available.
 5. Enable the system gateway service, check its live process and probe its authenticated loopback API.
 
-New profiles start with model setup deferred: no provider or model is presented as connected, and installation needs no model API key. Deferred configuration clears the upstream model/provider defaults; a later model update connects the selected provider. Explicitly selected API providers and external services still require their credentials. Account providers defer OAuth until Hermes is installed; custom endpoints support an explicit no-auth option. Service/API health and model credential configuration are shown separately. No successful model response is claimed without an actual inference test.
+`SetupOptions::clean_install` is applied at the backend installation boundary, so even a legacy draft selecting Telegram or an API provider cannot introduce a credential requirement. Model defaults are cleared, channels are empty and keyed transcription is disabled until selected. Explicitly selected integrations require credentials only when applying their settings after installation. Service/API health and model credential configuration are shown separately. No successful model response is claimed without an actual inference test.
 
 ## Durable remote jobs
 
@@ -113,3 +113,11 @@ Google login runs native `hermes auth add antigravity-oauth` inside a private PT
 `discover_provider_models` runs on the connected VPS, using in-memory input or the matching saved provider key. Direct HTTP probes implement OpenAI-compatible, Anthropic and Gemini metadata formats with bounded reads, TLS validation and redirect refusal. A changed custom endpoint cannot inherit a different endpoint's stored key. Other providers delegate to native Hermes model discovery and are labeled as Hermes catalogs, which may include native suggestions. Antigravity delegates to the plugin's live `agy models` reader and preserves exact IDs without static aliases. Model discovery makes no generation request and does not establish quota or inference permissions.
 
 The model picker automatically probes after credential entry/account approval, debounces changes and ignores stale replies after provider/key changes. It preserves manually entered IDs, supports searching and explicit refresh, and retains manual entry when discovery is unavailable. Empty successful catalogs and failed probes are distinct. Catalogs are bounded to 1,000 IDs and indicate truncation or upstream pagination.
+
+## Application and server updates
+
+Companion uses the Tauri updater with a committed public verification key and mandatory signed-version binding. A bounded HTTPS request reads public releases from the fixed Companion GitHub repository, including published previews. Drafts and invalid versions are excluded. A newer release's `latest.json` must be its own GitHub asset; the version and download URL must match that release. Update installation holds a native operation lock, streams progress over a Tauri channel, verifies the signature and restarts the app. The frontend never receives signing secrets or chooses an arbitrary executable URL.
+
+The release workflow signs each package type, including DEB and AppImage separately, and produces the macOS application archives used for replacement. A final job validates all five signed updater targets before assembling the manifest. The draft remains private until the maintainer publishes it.
+
+Hermes upgrades use `operation=update` under the existing server lock. A private profile archive is stored under `/var/lib/hermes-companion/backups/<timestamp>/`. The root-owned managed service is stopped by the job before invoking `hermes update --channel stable --yes --backup --no-gateway-restart` as the unprivileged Hermes user. The job never calls the configuration writer during an update or rewrites the existing system service definition. It restarts the service, checks health and updates version markers after success. Failure preserves the backup and old markers and attempts service recovery; it does not claim automatic rollback of arbitrary native migrations.

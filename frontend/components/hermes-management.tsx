@@ -7,6 +7,7 @@ import { SetupChannel } from "./setup-channel";
 import { SetupServices } from "./setup-services";
 import { ManagedTools } from "./managed-tools";
 import { DeploymentPanel } from "./deployment-panel";
+import { HermesUpdater } from "./hermes-updater";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
@@ -264,7 +265,9 @@ export function HermesManagement({
             running || pending
               ? status.operation === "provider"
                 ? "Preparing provider…"
-                : "Applying settings"
+                : status.operation === "update"
+                  ? "Updating Hermes…"
+                  : "Applying settings"
               : status.serviceActive
                 ? "Running"
                 : "Stopped",
@@ -283,6 +286,12 @@ export function HermesManagement({
           {t(changes.count && error ? "Discard changes and reload" : "Reload from server")}
         </Button>
       </header>
+      <HermesUpdater
+        serverId={server.id}
+        installedVersion={status.installedVersion}
+        disabled={blocked || !!changes.count}
+        onStatus={onStatus}
+      />
       {!!error && (
         <Notice error title="Could not update settings">
           <span lang="en" translate="no">

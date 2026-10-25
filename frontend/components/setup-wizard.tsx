@@ -1,4 +1,3 @@
-import { ModelSettings } from "./hermes-settings";
 export { ModelSettings } from "./hermes-settings";
 import { useLocale } from "@/components/locale-provider";
 import { useEffect, useRef, useState } from "react";
@@ -7,7 +6,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   ArrowLeft,
   ArrowRight,
-  Bot,
   Check,
   CheckCheck,
   Cloud,
@@ -16,9 +14,7 @@ import {
   HardDrive,
   KeyRound,
   LockKeyhole,
-  MessageCircle,
   Server as ServerIcon,
-  Settings2,
   ShieldCheck,
   TriangleAlert,
 } from "lucide-react";
@@ -40,12 +36,13 @@ import { errorMessage, serverSchema } from "@/lib/validation";
 import type {
   Credentials,
   DeploymentPlan,
+  DeploymentStatus,
   HostKey,
   Server,
   ServerDraft,
   ServerReport,
 } from "@/lib/types";
-import { Busy, ExternalLink, Notice, StepFocus, TrustNote } from "./shared";
+import { Busy, Notice, StepFocus, TrustNote } from "./shared";
 import { ServerPurchaseStep } from "./server-purchase";
 import { DeploymentPanel } from "./deployment-panel";
 
@@ -53,7 +50,6 @@ const steps = [
   { title: "Buy a VPS", description: "Choose a hosting provider and server", icon: Cloud },
   { title: "Your server", description: "Add connection details", icon: ServerIcon },
   { title: "Connection", description: "Check access and system", icon: KeyRound },
-  { title: "Hermes settings", description: "Choose the capabilities you need", icon: Settings2 },
   { title: "Installation", description: "Follow progress and service health", icon: CheckCheck },
 ];
 
@@ -64,7 +60,8 @@ interface WizardProps {
   setStep: (step: number) => void;
   onAdd: (draft: ServerDraft) => Promise<void>;
   onConnected: (report: ServerReport) => Promise<void>;
-  onSaved: () => Promise<void>;
+  status?: DeploymentStatus;
+  onConfigure: () => void;
   onBack: () => void;
 }
 
@@ -75,11 +72,11 @@ export function SetupWizard({
   setStep,
   onAdd,
   onConnected,
-  onSaved,
+  status,
+  onConfigure,
   onBack,
 }: WizardProps) {
   const { t } = useLocale();
-  const [installationStarted, setInstallationStarted] = useState(false);
   return (
     <div className="page-enter">
       <button className="back-link" onClick={onBack}>
@@ -130,24 +127,11 @@ export function SetupWizard({
             />
           )}
           {step === 3 && server && (
-            <ModelSettings
-              key={server.id}
-              server={server}
-              onSaved={async (started) => {
-                await onSaved();
-                setInstallationStarted(!!started);
-                setStep(4);
-              }}
-              onBack={() => setStep(2)}
-              wizard
-            />
-          )}
-          {step === 4 && server && (
             <ReviewStep
               server={server}
               connected={connected}
-              back={() => setStep(3)}
-              started={installationStarted}
+              status={status}
+              onConfigure={onConfigure}
             />
           )}
         </section>
@@ -177,7 +161,7 @@ function ServerForm({
   return (
     <>
       <div className="panel-heading">
-        <span className="step-counter">{t("Step {step} of {total}", { step: 2, total: 5 })}</span>
+        <span className="step-counter">{t("Step {step} of {total}", { step: 2, total: 4 })}</span>
         <h2>{t("Add your server")}</h2>
         <p>{t("Find your connection details in the email or dashboard from your VPS provider.")}</p>
       </div>
@@ -358,7 +342,7 @@ function ConnectionStep({
   return (
     <>
       <div className="panel-heading">
-        <span className="step-counter">{t("Step {step} of {total}", { step: 3, total: 5 })}</span>
+        <span className="step-counter">{t("Step {step} of {total}", { step: 3, total: 4 })}</span>
         <h2>{t("Connect to your server")}</h2>
         <p>
           {t(
@@ -613,17 +597,19 @@ function ServerInspection({ report }: { report: ServerReport }) {
 function ReviewStep({
   server,
   connected,
-  back,
-  started = false,
+  status,
+  onConfigure,
 }: {
   server: Server;
   connected: boolean;
-  back: () => void;
-  started?: boolean;
+  status?: DeploymentStatus;
+  onConfigure: () => void;
 }) {
   const { t } = useLocale();
   const [plan, setPlan] = useState<DeploymentPlan | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const running = status?.state === "running" || status?.state === "starting";
+  const installed = !!status?.managed && !!status.installedVersion;
   useEffect(() => {
     let active = true;
     api
@@ -637,106 +623,83 @@ function ReviewStep({
     return () => {
       active = false;
     };
-  }, [server]);
-  if (started)
-    return (
-      <>
-        <div className="panel-heading">
-          <h2>{t("Installation and service status")}</h2>
-          <p>{t("Setup is complete. Follow the installation running on your VPS below.")}</p>
-        </div>
-        <DeploymentPanel server={server} connected={connected} allowInstall />
-        <div className="form-footer">
-          <Button variant="ghost" onClick={back}>
-            <ArrowLeft />
-            {t("Edit settings")}
-          </Button>
-        </div>
-      </>
-    );
+  }, [server.id]);
   return (
     <>
       <div className="panel-heading">
-        <span className="step-counter">{t("Step {step} of {total}", { step: 5, total: 5 })}</span>
-        <h2>{t("Review the plan")}</h2>
-        <p>{t("Check what will change on server {name}.", { name: server.name })}</p>
+        <span className="step-counter">{t("Step {step} of {total}", { step: 4, total: 4 })}</span>
+        <h2>{t("Install Hermes first")}</h2>
+        <p>
+          {t(
+            "No bot tokens or model keys are needed. Connect your model, Telegram and services after installation.",
+          )}
+        </p>
       </div>
-      <StepFocus
-        title="Everything is ready for your review"
-        description="Check the selected model and capabilities below. Install latest Hermes starts the changes on your VPS."
-      />
-      <div className="review-selection">
-        <span>
-          <Bot />
-          {server.setup.deferModelSetup ? t("Not configured") : server.setup.provider}
-        </span>
-        <span>
-          {server.setup.deferModelSetup
-            ? t("Set up the model after installation")
-            : server.setup.model}
-        </span>
-        {server.setup.telegram && (
-          <span>
-            <MessageCircle />
-            Telegram
-          </span>
-        )}
-      </div>
-      {!!error && (
-        <Notice error title="Could not prepare the plan">
-          {errorMessage(error, t)}
-        </Notice>
-      )}
-      {!plan && !error && (
-        <div className="loading-inline">
-          <Busy>{t("Checking plan\u2026")}</Busy>
-        </div>
-      )}
-      {plan && (
+      {!running && !installed && (
         <>
-          <ol className="plan-list">
-            {plan.steps.map((step, index) => (
-              <li key={step.id}>
-                <span>{index + 1}</span>
-                <div>
-                  <h3>{t(step.title)}</h3>
-                  <p>{t(step.description)}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-          {(!connected || plan.blockers.length > 0) && (
-            <Notice title="Check before installation">
-              {!connected && <p>{t("Connect to the server in this app session.")}</p>}
-              {plan.blockers.map((blocker) => (
-                <p key={blocker}>{t(blocker)}</p>
-              ))}
-            </Notice>
-          )}
-          {!!plan.warnings.length && (
-            <Notice title="Resource recommendations">
-              {plan.warnings.map((warning) => (
-                <p key={warning}>{t(warning)}</p>
-              ))}
-            </Notice>
-          )}
-          <DeploymentPanel
-            server={server}
-            connected={connected}
-            allowInstall
-            blockers={plan.blockers}
+          <StepFocus
+            title="A clean installation without credentials"
+            description="We prepare Ubuntu, create the Hermes user and start the service. Your connections are configured next."
           />
+          {!!error && (
+            <Notice error title="Could not prepare the plan">
+              <span lang="en" translate="no">
+                {errorMessage(error)}
+              </span>
+            </Notice>
+          )}
+          {!plan && !error && <Busy>{t("Checking plan…")}</Busy>}
+          {plan && (
+            <>
+              <ol className="plan-list">
+                {plan.steps.map((item, index) => (
+                  <li key={item.id}>
+                    <span>{index + 1}</span>
+                    <div>
+                      <h3>{t(item.title)}</h3>
+                      <p>{t(item.description)}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              {!!plan.warnings.length && (
+                <Notice title="Resource recommendations">
+                  {plan.warnings.map((warning) => (
+                    <p key={warning}>{t(warning)}</p>
+                  ))}
+                </Notice>
+              )}
+              {!!plan.blockers.length && (
+                <Notice title="Check before installation">
+                  {plan.blockers.map((blocker) => (
+                    <p key={blocker}>{t(blocker)}</p>
+                  ))}
+                </Notice>
+              )}
+            </>
+          )}
         </>
       )}
-      <div className="form-footer">
-        <Button variant="ghost" onClick={back}>
-          <ArrowLeft data-icon="inline-start" />
-          {t("Edit settings")}
-        </Button>
-        <ExternalLink url="https://hermes-agent.nousresearch.com/docs/getting-started/installation">
-          {t("Installation documentation")}
-        </ExternalLink>
-      </div>
+      <DeploymentPanel
+        server={server}
+        connected={connected}
+        allowInstall
+        blockers={plan?.blockers ?? ["Check the server connection first."]}
+        showProviderSignIn={false}
+      />
+      {installed && !running && status?.apiHealthy && (
+        <Notice title="Hermes is ready to configure">
+          <p>
+            {t(
+              "Choose a model provider, then connect Telegram and any services you need. Everything can be changed later.",
+            )}
+          </p>
+          <Button onClick={onConfigure}>
+            {t("Continue to configuration")}
+            <ArrowRight data-icon="inline-end" />
+          </Button>
+        </Notice>
+      )}
     </>
   );
 }

@@ -102,14 +102,7 @@ impl Database {
             id: Uuid::new_v4().to_string(),
             connection,
             report: None,
-            setup: SetupOptions {
-                defer_model_setup: true,
-                model: String::new(),
-                channels: vec!["telegram".into()],
-                telegram: true,
-                browser: true,
-                ..Default::default()
-            },
+            setup: SetupOptions::clean_install(true),
         };
         self.lock()?.execute(
             "INSERT INTO servers (id,name,host,port,username,setup) VALUES (?1,?2,?3,?4,?5,?6)",
@@ -247,6 +240,16 @@ impl Database {
         }
         transaction.execute("INSERT INTO deployment_jobs(server_id,job_id,state) VALUES (?1,?2,?3) ON CONFLICT(server_id) DO UPDATE SET job_id=excluded.job_id,state=excluded.state", params![server_id,job_id,state])?;
         let transition = match status.state {
+            JobState::Succeeded if status.operation == "update" => Some((
+                "Hermes updated",
+                "Hermes was updated through the stable channel. Existing configuration and accounts were preserved.",
+                "success",
+            )),
+            JobState::Failed | JobState::Interrupted if status.operation == "update" => Some((
+                "Hermes update failed",
+                "The update did not complete. Review the logs. A private pre-update backup is stored on the server.",
+                "error",
+            )),
             JobState::Succeeded if status.operation == "provider" => Some((
                 "Provider support ready",
                 "Antigravity support was prepared. Sign in and select a model before applying your provider settings.",

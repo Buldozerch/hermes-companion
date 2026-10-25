@@ -197,6 +197,20 @@ impl Default for SetupOptions {
     }
 }
 
+impl SetupOptions {
+    pub fn clean_install(update_system: bool) -> Self {
+        let mut setup = Self {
+            defer_model_setup: true,
+            model: String::new(),
+            browser: true,
+            update_system,
+            ..Self::default()
+        };
+        setup.tools.retain(|tool| tool != "stt");
+        setup
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Activity {

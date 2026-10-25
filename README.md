@@ -40,8 +40,8 @@ The app includes links to [VDSina](https://www.vdsina.com/?partner=62n73usqa1jp)
 
 1. **Add your server.** Follow the hosting instructions or select that you already have a server.
 2. **Connect securely.** Enter SSH details and verify the server fingerprint before sending credentials.
-3. **Choose your setup.** Configure Telegram and optional voice/search/image services. Connect a model provider now or after installation; no model API key is needed if you defer this step. Core agent tools are enabled by default.
-4. **Install Hermes.** Follow live progress while the app prepares Ubuntu, creates the dedicated `hermes` user and installs the latest stable Hermes release. The remote job continues if the app closes.
+3. **Install Hermes first.** No model keys or messenger tokens are requested. Follow live progress while the app prepares Ubuntu, creates the dedicated `hermes` user and installs the latest stable Hermes release. The remote job continues if the app closes.
+4. **Connect what you need.** After installation, choose a model provider or browser account, enable Telegram and add optional voice/search/image services. Core agent tools are enabled by default.
 5. **Manage your agent.** Switch models or providers, replace keys, change channels and tools, or inspect service status and logs. Settings are applied without reinstalling Hermes.
 
 ## Connections and capabilities
@@ -55,6 +55,7 @@ The app includes links to [VDSina](https://www.vdsina.com/?partner=62n73usqa1jp)
 | Tools           | Terminal, code, files, memory and web tools enabled by default, with optional exclusions                                                         |
 | Services        | TTS, transcription, search, page extraction and optional image generation, including free options without API keys                               |
 | Operations      | Reconnectable installation progress, start/stop/restart, diagnostic logs and separate settings sections                                          |
+| Updates         | Signed Companion updates with restart; stable Hermes upgrades on the VPS with a private backup and preserved connections                         |
 | Interface       | Compact monochrome layout and persistent English/Russian switching; technical errors and logs stay in English                                    |
 
 Provider suggestions reflect the catalog snapshot, not a pinned Hermes installation version. Some providers require extra credentials, account access or dependencies. Model catalogs do not prove generation access or quota. Antigravity uses the [community plugin](https://github.com/neerazz/hermes-antigravity-oauth) and [official Google CLI](https://antigravity.google/cli); its normal sign-in performs a small verification turn after approval.

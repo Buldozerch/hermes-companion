@@ -2794,6 +2794,49 @@
   }
 }
 
+.hermes-update-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  border: 1px solid var(--border);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+.hermes-update-bar > div:first-child {
+  flex: 1;
+  min-width: 200px;
+}
+.hermes-update-bar p {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  margin: 4px 0 0;
+}
+.update-notes {
+  white-space: pre-wrap;
+  max-height: 240px;
+  overflow-y: auto;
+  font-size: 0.75rem;
+}
+progress {
+  width: 100%;
+  accent-color: var(--foreground);
+  height: 6px;
+}
+@media (max-width: 52.5rem) {
+  .topbar-right > button[aria-label] {
+    width: 32px;
+    padding-inline: 0;
+    overflow: hidden;
+    font-size: 0;
+    gap: 0;
+  }
+  .topbar-right > button[aria-label] svg {
+    font-size: initial;
+    flex-shrink: 0;
+  }
+}
+
 /* Installed-server settings use independent sections and a shared apply action. */
 .hermes-management {
   display: flex;

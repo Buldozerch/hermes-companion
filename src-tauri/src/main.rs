@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod updater;
+
 use hermes_core::{
     Activity, AppError, Credentials, Database, HostKey, HostKeyStatus, Result, Server, ServerDraft,
     ServerReport, SetupOptions,
@@ -162,6 +164,10 @@ async fn start_deployment(
         Err(error) => state.database.record(Some(&server_id), "Installation could not start", &error.message, "error")?,
     }
     if let Ok(status) = &result {
+        state.database.save_setup(
+            &server_id,
+            &SetupOptions::clean_install(server.setup.update_system),
+        )?;
         state.database.observe_deployment(&server_id, status)?;
     }
     result
@@ -293,6 +299,30 @@ async fn prepare_provider(
 }
 
 #[tauri::command]
+async fn check_hermes_update(
+    server_id: String,
+    state: State<'_, AppState>,
+) -> Result<hermes_core::updates::HermesUpdate> {
+    let session = connected_session(&state, &server_id).await?;
+    hermes_core::updates::check(&session).await
+}
+
+#[tauri::command]
+async fn update_hermes(server_id: String, state: State<'_, AppState>) -> Result<DeploymentStatus> {
+    let session = connected_session(&state, &server_id).await?;
+    let server = state.database.server(&server_id)?;
+    let result = hermes_core::updates::start(&session, &server).await?;
+    state.database.observe_deployment(&server_id, &result)?;
+    state.database.record(
+        Some(&server_id),
+        "Hermes update started",
+        "Creating a private backup and updating Hermes to the latest stable release.",
+        "info",
+    )?;
+    Ok(result)
+}
+
+#[tauri::command]
 async fn discover_provider_models(
     server_id: String,
     setup: SetupOptions,
@@ -306,6 +336,8 @@ async fn discover_provider_models(
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updater::AppUpdates::default())
         .setup(|app| {
             let directory = app.path().app_data_dir()?;
             std::fs::create_dir_all(&directory)?;
@@ -335,6 +367,10 @@ fn main() {
             provider_auth,
             discover_provider_models,
             prepare_provider,
+            check_hermes_update,
+            update_hermes,
+            updater::check_companion_update,
+            updater::install_companion_update,
             manage_service,
             get_remote_logs
         ])

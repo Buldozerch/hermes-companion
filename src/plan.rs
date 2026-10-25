@@ -60,7 +60,7 @@ pub fn deployment_plan(server: &Server) -> DeploymentPlan {
     steps.extend([
         PlanStep {id:"user",title:"Create the Hermes user",description:"The agent will run under a dedicated user without administrator privileges."},
         PlanStep {id:"install",title:"Install Hermes Agent",description:"Use the official installer and stable release channel."},
-        PlanStep {id:"configure",title:"Save your settings",description:"Connect the model provider and selected integrations."},
+        PlanStep {id:"configure",title:"Prepare clean configuration",description:"Start Hermes without model keys or messenger tokens. Connect them after installation."},
         PlanStep {id:"service",title:"Configure continuous operation",description:"Create an automatically started service and check its health."},
     ]);
     DeploymentPlan {

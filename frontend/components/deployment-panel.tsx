@@ -1,6 +1,6 @@
 import { useSetupCredentials } from "@/components/setup-credentials";
 import { ProviderSignIn } from "@/components/provider-sign-in";
-import { selectedProvider, usesBrowserAuth } from "@/lib/setup-catalog";
+import { usesBrowserAuth } from "@/lib/setup-catalog";
 import { useEffect, useRef, useState } from "react";
 import { Check, Download, FileText, Play, RotateCw, Square, Terminal } from "lucide-react";
 import { useLocale } from "@/components/locale-provider";
@@ -23,6 +23,7 @@ const labels = {
 const stages = ["system", "user", "install", "configure", "service", "complete"];
 const stageLabels: Record<string, string> = {
   system: "Update the system",
+  backup: "Create a private backup",
   user: "Create the Hermes user",
   install: "Install Hermes Agent",
   configure: "Save your settings",
@@ -83,26 +84,36 @@ export function DeploymentPanel({
   }, [connected, server.id]);
   const installing = status?.state === "running" || status?.state === "starting";
   const preparing = status?.operation === "provider";
+  const updating = status?.operation === "update";
   const configuring = status?.operation === "configure" || preparing;
-  const statusLabel = preparing
+  const statusLabel = updating
     ? {
-        starting: "Preparing provider…",
-        running: "Preparing provider…",
-        succeeded: "Provider support ready",
-        failed: "Provider preparation failed",
-        interrupted: "Settings interrupted",
+        starting: "Starting",
+        running: "Updating Hermes…",
+        succeeded: "Hermes updated",
+        failed: "Hermes update failed",
+        interrupted: "Hermes update interrupted",
         none: "Not installed",
       }[status?.state ?? "none"]
-    : configuring
+    : preparing
       ? {
-          starting: "Starting",
-          running: "Applying settings",
-          succeeded: "Settings applied",
-          failed: "Settings failed",
+          starting: "Preparing provider…",
+          running: "Preparing provider…",
+          succeeded: "Provider support ready",
+          failed: "Provider preparation failed",
           interrupted: "Settings interrupted",
           none: "Not installed",
         }[status?.state ?? "none"]
-      : labels[status?.state ?? "none"];
+      : configuring
+        ? {
+            starting: "Starting",
+            running: "Applying settings",
+            succeeded: "Settings applied",
+            failed: "Settings failed",
+            interrupted: "Settings interrupted",
+            none: "Not installed",
+          }[status?.state ?? "none"]
+        : labels[status?.state ?? "none"];
   const progress =
     status?.state === "succeeded" ? 5 : Math.max(0, stages.indexOf(status?.step ?? "system"));
   const remainingBlockers = blockers.filter(
@@ -172,7 +183,9 @@ export function DeploymentPanel({
             {t(
               preparing
                 ? "Preparing provider…"
-                : (stageLabels[status?.step ?? "system"] ?? "Installing"),
+                : updating && status?.step === "install"
+                  ? "Updating Hermes…"
+                  : (stageLabels[status?.step ?? "system"] ?? "Installing"),
             )}
           </Busy>
           <div
@@ -199,9 +212,11 @@ export function DeploymentPanel({
           {t(
             preparing
               ? "Provider support ready. Sign in and select a model before applying your settings."
-              : configuring
-                ? "Settings applied. Service health and model credentials are shown above."
-                : "Hermes is installed. Service health and model credentials are shown separately above.",
+              : updating
+                ? "Hermes is updated. Your configuration and connections were preserved."
+                : configuring
+                  ? "Settings applied. Service health and model credentials are shown above."
+                  : "Hermes is installed. Service health and model credentials are shown separately above.",
           )}
         </p>
       )}
@@ -241,10 +256,7 @@ export function DeploymentPanel({
                   apiKey: "",
                   telegramToken: "",
                   telegramAllowedUsers: "",
-                  values: Object.entries(credentials.values).map(([name, value]) => ({
-                    name,
-                    value,
-                  })),
+                  values: [],
                 }),
               );
               credentials.clear();
@@ -255,28 +267,6 @@ export function DeploymentPanel({
             }
           }}
         >
-          <dl className="deployment-facts">
-            <div>
-              <dt>{t("Model provider")}</dt>
-              <dd>
-                {server.setup.deferModelSetup
-                  ? t("Not configured")
-                  : selectedProvider(server.setup.provider).name}
-              </dd>
-            </div>
-            <div>
-              <dt>{t("Model name")}</dt>
-              <dd>{server.setup.deferModelSetup ? t("Not configured") : server.setup.model}</dd>
-            </div>
-            <div>
-              <dt>{t("Channels")}</dt>
-              <dd>{server.setup.channels?.join(", ") || t("None selected")}</dd>
-            </div>
-            <div>
-              <dt>{t("Tools")}</dt>
-              <dd>{server.setup.tools?.length ?? 0}</dd>
-            </div>
-          </dl>
           <p className="deployment-disclosure">
             {t(
               "Installs the latest stable Hermes release, prepares Ubuntu packages, creates the hermes account and enables a background service.",

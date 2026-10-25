@@ -1,4 +1,4 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { normalizeSetup } from "./setup-catalog";
 import type {
@@ -17,13 +17,17 @@ import type {
   SettingsUpdate,
   ProviderAuthReply,
   ProviderModels,
+  HermesUpdate,
+  CompanionUpdate,
+  UpdateProgress,
 } from "./types";
 
 export const desktop = isTauri();
 const previewKey = "hermes-companion.preview.v1";
 export const defaultSetup: SetupOptions = normalizeSetup({
   deferModelSetup: true,
-  channels: ["telegram"],
+  channels: [],
+  tools: normalizeSetup({}).tools.filter((tool) => tool !== "stt"),
   updateSystem: true,
 });
 
@@ -66,6 +70,16 @@ function desktopRequiredError() {
 }
 
 export const api = {
+  checkCompanionUpdate: (): Promise<CompanionUpdate> => invoke("check_companion_update"),
+  installCompanionUpdate: (onProgress: (progress: UpdateProgress) => void): Promise<void> => {
+    const progress = new Channel<UpdateProgress>();
+    progress.onmessage = onProgress;
+    return invoke("install_companion_update", { progress });
+  },
+  checkHermesUpdate: (serverId: string): Promise<HermesUpdate> =>
+    invoke("check_hermes_update", { serverId }),
+  updateHermes: (serverId: string): Promise<DeploymentStatus> =>
+    invoke("update_hermes", { serverId }),
   load: async (): Promise<Workspace> => {
     const workspace: Workspace = desktop ? await invoke("load_workspace") : readPreview();
     return {

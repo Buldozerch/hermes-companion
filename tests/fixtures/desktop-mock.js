@@ -11,8 +11,25 @@
   window.__QA__ = state;
   window.isTauri = true;
   window.__TAURI_INTERNALS__ = {
+    transformCallback: () => 1,
+    unregisterCallback: () => {},
     invoke: async (command, args = {}) => {
       switch (command) {
+        case "check_companion_update": return structuredClone(state.companionUpdate ?? {currentVersion:"0.1.2",latestVersion:"0.1.2",available:false,canInstall:false,notes:""});
+        case "install_companion_update":
+          if(state.companionUpdateError) throw {code:"appUpdate",message:"The application update failed. Signature verification failed."};
+          state.companionInstallCalls=(state.companionInstallCalls??0)+1;
+          args.progress.onmessage({stage:"downloading",downloaded:512,total:1024});
+          await new Promise(resolve=>setTimeout(resolve,500));
+          args.progress.onmessage({stage:"installing",downloaded:1024,total:1024});
+          await new Promise(resolve=>setTimeout(resolve,500));
+          args.progress.onmessage({stage:"restarting",downloaded:1024,total:1024});
+          return;
+        case "check_hermes_update": return structuredClone(state.hermesUpdate ?? {currentVersion:"v9.8.7",latestVersion:"v9.8.7",available:false});
+        case "update_hermes":
+          state.hermesUpdateCalls=(state.hermesUpdateCalls??0)+1;
+          Object.assign(state.job,{jobId:"00000000-0000-4000-8000-000000000088",operation:"update",state:"running",step:"backup"});
+          return structuredClone(state.job);
         case "load_workspace": return structuredClone(state.workspace);
         case "connected_servers": return state.connected ? [server.id] : [];
         case "probe_host": return { fingerprint: "SHA256:qa-fixture", algorithm: "ssh-ed25519", status: "trusted", previousFingerprint: "SHA256:qa-fixture" };
@@ -46,6 +63,7 @@
         case "start_deployment":
           state.installCalls++;
           state.lastSecrets = args.secrets;
+          Object.assign(server.setup,{deferModelSetup:true,model:"",channels:[],telegram:false,tools:["file","memory","web","tts"]});
           Object.assign(state.job, { jobId: "00000000-0000-4000-8000-000000000001", state: "running", step: "install", version: "v9.8.7", managed: true, events: ["Resolving the latest stable Hermes release.", "Installing Hermes v9.8.7."] });
           return structuredClone(state.job);
         case "apply_setup":

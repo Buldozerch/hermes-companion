@@ -35,11 +35,11 @@ The release checks need a Git working tree. If you copy the source folder withou
 Examples of collected filenames:
 
 ```text
-releases/linux-x86_64/Hermes-Companion_0.1.1_linux-x86_64.deb
-releases/linux-x86_64/Hermes-Companion_0.1.1_linux-x86_64.AppImage
-releases/windows-x86_64/Hermes-Companion_0.1.1_windows-x86_64_setup.exe
-releases/macos-aarch64/Hermes-Companion_0.1.1_macos-aarch64.dmg
-releases/macos-x86_64/Hermes-Companion_0.1.1_macos-x86_64.dmg
+releases/linux-x86_64/Hermes-Companion_0.1.2_linux-x86_64.deb
+releases/linux-x86_64/Hermes-Companion_0.1.2_linux-x86_64.AppImage
+releases/windows-x86_64/Hermes-Companion_0.1.2_windows-x86_64_setup.exe
+releases/macos-aarch64/Hermes-Companion_0.1.2_macos-aarch64.dmg
+releases/macos-x86_64/Hermes-Companion_0.1.2_macos-x86_64.dmg
 ```
 
 Each platform folder also contains `SHA256SUMS-<platform>.txt`. Those are generated files and stay outside Git. To collect an already completed native build without compiling again, run `npm run release:collect`.
@@ -76,20 +76,20 @@ The [checks workflow](../.github/workflows/checks.yml) validates versions, file 
 
 Keep `package.json`, the root entry in `package-lock.json`, both Cargo manifests and `src-tauri/tauri.conf.json` on the same version. Update the workspace entries in `Cargo.lock` when changing Cargo versions. Run `npm run check:release` before tagging.
 
-For version 0.1.1, after committing and pushing the release changes:
+For version 0.1.2, after committing and pushing the release changes:
 
 ```bash
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
-The tag must match the application version. Once every build succeeds, the workflow creates or updates a **draft prerelease** containing the five installers and per-platform SHA-256 manifests. It refuses to replace files in a published release. Review the packages and [release notes](release-notes.md), perform the checks below and publish the draft manually when ready. Public publishing is not automatic.
+The tag must match the application version. Once every build succeeds, the workflow creates or updates a **draft prerelease** containing the five installers, signed update bundles, `latest.json` and per-platform SHA-256 manifests. It refuses to replace files in a published release. Review the packages and [release notes](release-notes.md), perform the checks below and publish the draft manually when ready. Public publishing is not automatic.
 
-The workflow uses GitHub's built-in token. Read access is sufficient for builds; only the draft assembly job receives `contents: write`. No SSH credentials, API keys, Apple account or Microsoft signing certificate are required for these preview builds.
+The workflow uses GitHub's built-in token. Read access is sufficient for builds; only the draft assembly job receives `contents: write`. No SSH credentials, provider API keys, Apple account or Microsoft signing certificate are required. Builds need the dedicated updater signing secrets described below.
 
 ## Install and verify packages
 
-- **Linux DEB:** on a compatible Debian/Ubuntu desktop, run `sudo apt install ./Hermes-Companion_0.1.1_linux-x86_64.deb`, then launch Hermes Companion from the application menu.
+- **Linux DEB:** on a compatible Debian/Ubuntu desktop, run `sudo apt install ./Hermes-Companion_0.1.2_linux-x86_64.deb`, then launch Hermes Companion from the application menu.
 - **Linux AppImage:** make the downloaded file executable and launch it. If FUSE is unavailable, use the AppImage extraction mode described by the Tauri guide. A graphical session and a compatible build-host ABI are still required.
 - **Windows:** run the `_setup.exe`, then launch the installed app. These preview packages have no publisher certificate, so Windows may display a reputation warning.
 - **macOS:** select the DMG matching the CPU, open it and drag the app to Applications. Packages use ad-hoc signing and are not notarized. macOS may require approval in Privacy & Security; see [Tauri's explanation](https://v2.tauri.app/distribute/sign/macos/). Do not disable Gatekeeper system-wide.
@@ -112,3 +112,15 @@ Run this on Linux, Windows, an Apple Silicon Mac and an Intel Mac when available
 - Resize the window, navigate with the keyboard and check long provider/model names for clipping in each native WebView.
 
 Successful compilation is not a manual UI or real-account test. Record the desktop OS, architecture, installer filename/hash and observed result without credentials. Windows/macOS remain unverified until those runs actually happen.
+
+## Update signing
+
+The committed public key in `src-tauri/tauri.conf.json` verifies updates. Keep the matching private key and its password in a secure backup; replacing the key breaks updates for existing installations. Private files in `local-notes/updater/` are ignored and must never be committed.
+
+With the maintainer's existing local signing files and GitHub CLI access, run `node scripts/configure-release-signing.mjs --upload` once to configure `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` as repository Actions secrets. Fork maintainers must generate their own key and configure their own repository and update endpoints.
+
+Release jobs generate update artifacts, sign their bytes with a bound application version and assemble one manifest for all package types. Publishing the draft makes that manifest discoverable. Companion checks published releases including previews and selects the highest newer semantic version. It never installs drafts or unsigned packages. See [Tauri updater signing](https://v2.tauri.app/plugin/updater/) for the key format and platform behavior.
+
+`npm run release` uses the ignored local signing files when present. Other developers can build local installers without that private key; the helper disables update-artifact generation for those builds. Such a local app can still verify future official updates using the public key.
+
+Version 0.1.2 must be installed manually by users of older Companion versions. Subsequent signed releases can be installed through the new update button. Windows/macOS full replacement and restart still require manual package testing.
