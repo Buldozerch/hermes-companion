@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 
-parser=argparse.ArgumentParser();parser.add_argument('--url',default='http://127.0.0.1:1420');parser.add_argument('--chromium',default='/home/buldozer/.cache/ms-playwright/chromium-1200/chrome-linux64/chrome');args=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('--url',default='http://127.0.0.1:1420');parser.add_argument('--chromium',default=None);args=parser.parse_args()
 ru=json.loads(Path('frontend/locales/ru.json').read_text());catalog=json.loads(Path('catalog/hermes-options.json').read_text())
 core=[tool['id'] for tool in catalog['tools'] if tool['id'] not in ['tts','stt','image_gen','video_gen','x_search','computer_use','discord_admin','yuanbao']]
 screenshots=Path('/tmp/hermes-companion-screenshots');screenshots.mkdir(exist_ok=True)

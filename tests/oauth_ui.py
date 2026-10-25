@@ -6,7 +6,7 @@ from playwright.sync_api import sync_playwright, expect
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--url', default='http://127.0.0.1:1420')
-parser.add_argument('--chromium', default='/home/buldozer/.cache/ms-playwright/chromium-1200/chrome-linux64/chrome')
+parser.add_argument('--chromium', default=None)
 args = parser.parse_args()
 ru = json.loads(Path('frontend/locales/ru.json').read_text())
 screenshots = Path('/tmp/hermes-companion-screenshots')
