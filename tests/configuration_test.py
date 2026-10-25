@@ -358,6 +358,65 @@ class ConfigurationTest(unittest.TestCase):
         configure(data, catalog, store)
         self.assertNotIn('api_key', store.config['model'])
 
+    def test_custom_protocol_uses_a_named_transport_and_round_trips_to_the_gui(self):
+        data = payload(provider='custom', baseUrl='https://gateway.example/v1', model='gpt-6.1-sol', apiMode='codex_responses')
+        credentials(data, COMPANION_CUSTOM_API_KEY='private-custom-key')
+        store = ConfigStore({'providers': {'unrelated': {'base_url': 'https://other.example/v1', 'transport': 'anthropic_messages'}}})
+        configure(data, catalog, store)
+        name = store.config['model']['provider']
+        self.assertTrue(name.startswith('companion-custom-'))
+        route = store.config['providers'][name]
+        self.assertEqual(route['transport'], 'codex_responses')
+        self.assertEqual(store.env[route['key_env']], 'private-custom-key')
+        self.assertNotIn('private-custom-key', json.dumps(store.config))
+        snapshot = read_settings(data['setup'], catalog, store)
+        self.assertEqual(snapshot['setup']['provider'], 'custom')
+        self.assertEqual(snapshot['setup']['apiMode'], 'codex_responses')
+        self.assertFalse(snapshot['modelTransportNeedsUpdate'])
+        self.assertEqual(snapshot['warnings'], [])
+        self.assertTrue(snapshot['modelConfigured'])
+        self.assertEqual(store.config['providers']['unrelated']['transport'], 'anthropic_messages')
+        store.config['providers'][name]['api_mode'] = 'anthropic_messages'
+        store.config['model']['openai_runtime'] = 'codex_app_server'
+        data['setup']['apiMode'] = 'chat_completions'
+        credentials(data)
+        configure(data, catalog, store)
+        self.assertEqual(store.config['providers'][name]['transport'], 'chat_completions')
+        self.assertNotIn('api_mode', store.config['providers'][name])
+        self.assertNotIn('openai_runtime', store.config['model'])
+
+    def test_editing_tools_preserves_the_named_custom_route_and_its_transport(self):
+        data = payload(provider='custom', baseUrl='https://gateway.example/v1', model='gpt-6-astra', apiMode='codex_responses')
+        credentials(data, COMPANION_CUSTOM_API_KEY='private-custom-key')
+        store = ConfigStore()
+        configure(data, catalog, store)
+        route = copy.deepcopy(store.config['providers'])
+        data['sections'] = ['tools']
+        data['expectedRevision'] = helper['settings_revision'](store.config, store.env)
+        data['setup']['tools'] = ['file']
+        credentials(data)
+        configure(data, catalog, store)
+        self.assertEqual(store.config['providers'], route)
+        self.assertEqual(read_settings(data['setup'], catalog, store)['setup']['apiMode'], 'codex_responses')
+
+    def test_existing_anonymous_responses_connection_can_be_repaired_without_new_values(self):
+        store = ConfigStore({'model': {'provider': 'custom', 'default': 'gpt-6.1-sol', 'base_url': 'https://gateway.example/v1', 'api_mode': 'codex_responses', 'api_key': 'private-inline-key'}})
+        data = payload(provider='custom', baseUrl='https://gateway.example/v1', model='gpt-6.1-sol', apiMode='codex_responses')
+        snapshot = read_settings(data['setup'], catalog, store)
+        self.assertTrue(snapshot['modelTransportNeedsUpdate'])
+        self.assertIn('COMPANION_CUSTOM_API_KEY', snapshot['configuredCredentials'])
+        data.update(setup=snapshot['setup'], sections=['model'], expectedRevision=snapshot['revision'])
+        credentials(data)
+        configure(data, catalog, store)
+        repaired = read_settings(data['setup'], catalog, store)
+        self.assertFalse(repaired['modelTransportNeedsUpdate'])
+        self.assertTrue(repaired['modelConfigured'])
+        self.assertEqual(repaired['setup']['model'], 'gpt-6.1-sol')
+        self.assertEqual(repaired['setup']['baseUrl'], 'https://gateway.example/v1')
+        self.assertNotIn('private-inline-key', json.dumps(store.config))
+        route = store.config['providers'][store.config['model']['provider']]
+        self.assertEqual(store.env[route['key_env']], 'private-inline-key')
+
     def test_voice_choices_apply_and_disabled_transcription_stays_disabled(self):
         data = payload(tools=['tts'], ttsProvider='elevenlabs', ttsVoice='voice-id', sttProvider='mistral')
         store = ConfigStore()

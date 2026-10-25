@@ -156,14 +156,16 @@ export function HermesManagement({
     setError(null);
     setSaved(false);
   }
-  async function apply() {
-    if (!snapshot || blocked || !changes.count) return;
+  async function apply(transportOnly = false) {
+    if (!snapshot || blocked || (!changes.count && !transportOnly)) return;
+    if (transportOnly && (!snapshot.modelTransportNeedsUpdate || changes.count)) return;
+    const sections: SettingsSection[] = transportOnly ? ["model"] : changes.sections;
     const nextErrors = validateManagedSettings(
       setup,
       snapshot.setup,
       credentials.values,
       available,
-      changes.sections,
+      sections,
       snapshot.authorizedProviders ?? [],
     );
     setErrors(nextErrors);
@@ -191,7 +193,7 @@ export function HermesManagement({
       const active = activeCredentialNames(setup);
       const result = await api.applySettings(
         server.id,
-        { setup, sections: changes.sections, revision: snapshot.revision },
+        { setup, sections, revision: snapshot.revision },
         {
           apiKey: "",
           telegramToken: "",
@@ -333,6 +335,27 @@ export function HermesManagement({
               <span>{t(warning)}</span>
             </Notice>
           ))}
+          {snapshot.modelTransportNeedsUpdate && (
+            <Notice title="Transport update available">
+              <p>
+                {t(
+                  "Your Responses connection uses legacy anonymous routing. Apply the transport fix to preserve your model, endpoint and saved key while enabling the selected API.",
+                )}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={blocked || !!changes.count}
+                onClick={() => void apply(true)}
+              >
+                {t("Apply transport fix")}
+              </Button>
+              {!!changes.count && (
+                <p>{t("Apply or discard your pending edits before repairing the transport.")}</p>
+              )}
+            </Notice>
+          )}
           <ToggleGroup
             type="single"
             variant="outline"

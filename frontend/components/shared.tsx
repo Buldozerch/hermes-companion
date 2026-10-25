@@ -77,7 +77,10 @@ export function ExternalLink({
 export function ConnectionBadge({ connected }: { connected: boolean }) {
   const { t } = useLocale();
   return (
-    <Badge variant="secondary" className={connected ? "status-badge connected" : "status-badge"}>
+    <Badge
+      variant={connected ? "success" : "secondary"}
+      className={connected ? "status-badge connected" : "status-badge"}
+    >
       <span className="status-dot" />
       {t(connected ? "SSH connected" : "Not connected")}
     </Badge>

@@ -20,6 +20,8 @@ pub struct SettingsSnapshot {
     pub configured_credentials: Vec<String>,
     pub model_configured: bool,
     #[serde(default)]
+    pub model_transport_needs_update: bool,
+    #[serde(default)]
     pub authorized_providers: Vec<String>,
     #[serde(default)]
     pub prepared_providers: Vec<String>,
@@ -125,6 +127,7 @@ mod tests {
             setup: SetupOptions::default(),
             configured_credentials: vec![],
             model_configured: false,
+            model_transport_needs_update: false,
             authorized_providers: vec![],
             prepared_providers: vec![],
             revision: "current-revision".into(),

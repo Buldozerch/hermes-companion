@@ -33,6 +33,7 @@ with sync_playwright() as p:
     page.get_by_label('Server password').fill('qa-ssh-password')
     page.get_by_role('button', name='Check connection', exact=True).click()
     expect(page.get_by_role('heading', name='Connection established')).to_be_visible()
+    expect(page.locator('.connection-success h3')).to_have_css('color','rgb(74, 222, 128)')
     expect(page.get_by_role('button', name='Hermes settings', exact=True)).to_be_disabled()
     page.get_by_role('button', name='Set up Hermes', exact=True).click()
     expect(page.get_by_role('heading',name='Install Hermes first',exact=True)).to_be_visible()
@@ -58,8 +59,11 @@ with sync_playwright() as p:
     expect(spinner).to_have_css('animation-name','spin')
     transform = spinner.evaluate('(element) => getComputedStyle(element).transform')
     page.wait_for_function('previous => getComputedStyle(document.querySelector(".deployment-stage .spin")).transform !== previous', arg=transform, timeout=2000)
-    # Even with reduced motion, a quiet install remains observable through a ticking clock.
+    # The operational spinner keeps rotating with reduced motion; decorative animations stay off.
     page.emulate_media(reduced_motion='reduce')
+    expect(spinner).to_have_css('animation-name','spin')
+    transform = spinner.evaluate('(element) => getComputedStyle(element).transform')
+    page.wait_for_function('previous => getComputedStyle(document.querySelector(".deployment-stage .spin")).transform !== previous', arg=transform, timeout=2000)
     before = page.get_by_test_id('installation-elapsed').inner_text()
     expect(page.get_by_test_id('installation-elapsed')).not_to_have_text(before, timeout=4000)
     page.evaluate("window.__QA__.remoteLogs='Preparing dependencies…\\nDependencies installed.\\n--- Hermes service journal ---\\nOld service log must stay separate.'")

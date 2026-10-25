@@ -86,6 +86,10 @@ export function SetupModel({
   const models = preset?.models ?? provider.models;
   const keyUrl = preset?.keyUrl ?? provider.keyUrl;
   const oauth = usesBrowserAuth(setup);
+  const responsesHint =
+    setup.provider === "custom" &&
+    setup.apiMode === "chat_completions" &&
+    /(?:^|[-/_.:])(sol|astra)(?:$|[-/_.:])/i.test(setup.model);
   const accountAuthorized =
     authorizedProviders.includes(provider.id) ||
     (!["anthropic", "openrouter", "antigravity-oauth"].includes(provider.id) &&
@@ -445,18 +449,40 @@ export function SetupModel({
                   )}
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="model-api-mode">{t("API protocol")}</FieldLabel>
+                  <FieldLabel htmlFor="model-api-mode">{t("Transport / API mode")}</FieldLabel>
                   <select
                     id="model-api-mode"
                     className="native-select"
                     value={setup.apiMode}
                     onChange={(event) => change({ apiMode: event.target.value })}
                   >
-                    <option value="chat_completions">OpenAI Chat Completions</option>
-                    <option value="codex_responses">OpenAI Responses</option>
-                    <option value="anthropic_messages">Anthropic Messages</option>
+                    <option value="chat_completions">OpenAI Chat — /v1/chat/completions</option>
+                    <option value="codex_responses">OpenAI Responses — /v1/responses</option>
+                    <option value="anthropic_messages">Anthropic Messages — /v1/messages</option>
                   </select>
+                  <FieldDescription>
+                    {t(
+                      "Choose the API supported by your gateway. The model name and model list do not determine its protocol.",
+                    )}
+                  </FieldDescription>
                 </Field>
+                {responsesHint && (
+                  <Notice title="Check the model protocol">
+                    <p>
+                      {t(
+                        "If your Sol/Astra gateway rejects Chat Completions, select OpenAI Responses. Start a new Hermes session with /new after applying the change.",
+                      )}
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => change({ apiMode: "codex_responses" })}
+                    >
+                      {t("Use OpenAI Responses")}
+                    </Button>
+                  </Notice>
+                )}
               </>
             )}
             {provider.id === "bedrock" && (

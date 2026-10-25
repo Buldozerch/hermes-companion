@@ -119,6 +119,7 @@ export interface SettingsSnapshot {
   setup: SetupOptions;
   configuredCredentials: string[];
   modelConfigured: boolean;
+  modelTransportNeedsUpdate?: boolean;
   authorizedProviders: string[];
   preparedProviders?: string[];
   revision: string;

@@ -51,6 +51,29 @@ def exercise_native_profile(directory):
     assert not config.load_env().get('TELEGRAM_BOT_TOKEN')
     assert (home / '.hermes/plugins/web/web-companion-parser/plugin.yaml').is_file()
     assert 'API_SERVER_KEY' not in json.dumps(snapshot)
+    # Check the resolved runtime, not only YAML: anonymous custom Responses is downgraded
+    # by Hermes on foreign hosts, while named providers honor their explicit transport.
+    from hermes_cli.runtime_provider import resolve_runtime_provider
+    for mode in ['codex_responses', 'chat_completions', 'anthropic_messages']:
+        data['setup'].update(deferModelSetup=False, provider='custom', model='gpt-6.1-sol',
+                             baseUrl='https://gateway.example/v1', apiMode=mode)
+        namespace['credentials'](data, COMPANION_CUSTOM_API_KEY='isolated-test-key')
+        namespace['configure'](data, namespace['catalog'], config)
+        raw = config.read_raw_config()
+        name = raw['model']['provider']
+        assert raw['providers'][name]['transport'] == mode
+        with patch('socket.socket.connect', side_effect=RuntimeError('Unexpected network access during routing')):
+            for arguments in [{}, {'requested': name}, {'requested': name, 'explicit_base_url': data['setup']['baseUrl'], 'explicit_api_key': 'isolated-test-key'}]:
+                runtime = resolve_runtime_provider(**arguments)
+                assert runtime['provider'] == 'custom'
+                assert runtime['api_mode'] == mode
+                assert runtime['base_url'] == data['setup']['baseUrl']
+                assert runtime['api_key'] == 'isolated-test-key'
+        snapshot = namespace['read_settings'](data['setup'], namespace['catalog'], config)
+        assert snapshot['setup']['provider'] == 'custom' and snapshot['setup']['apiMode'] == mode
+        assert not snapshot['modelTransportNeedsUpdate']
+        assert snapshot['modelConfigured']
+        assert 'isolated-test-key' not in json.dumps(raw) and 'isolated-test-key' not in json.dumps(snapshot)
     print('Native configuration write/read passed.')
 
 

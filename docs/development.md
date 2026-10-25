@@ -42,7 +42,7 @@ To check compatibility with a real Hermes release, use a separate trusted checko
 HERMES_NATIVE_CHECKOUT=/path/to/hermes-agent python3 -m unittest discover -s tests -p 'configuration_native_test.py' -v
 ```
 
-This opt-in test seeds the official installer template and exercises native configuration write/read in a temporary profile. It checks a clean installation without model or Telegram credentials, loopback API configuration and the parser plugin. It does not install packages, start a gateway or contact the VPS. Normal test runs skip it when no checkout is provided.
+This opt-in test seeds the official installer template and exercises native configuration write/read in a temporary profile. It checks a clean installation without model or Telegram credentials, loopback API configuration and the parser plugin. It also verifies named custom transports through the native runtime resolver, including explicit endpoint/key arguments; network access is blocked during routing. It does not install packages, start a gateway or contact the VPS. Normal test runs skip it when no checkout is provided.
 
 `npm run check:release` verifies matching versions, private/generated file exclusions, required files remaining trackable, tracked ignored files and local documentation links. `RELEASE_TAG=v0.1.0` can additionally validate the expected tag. Never run `git add -f` on private credentials to pass an ignore check.
 
@@ -62,6 +62,7 @@ python -m venv .venv
 .venv/bin/python tests/provider_models_ui.py
 .venv/bin/python tests/updates_ui.py
 .venv/bin/python tests/reboot_ui.py
+.venv/bin/python tests/transport_ui.py
 ```
 
 On Windows use `.venv\Scripts\python` instead of `.venv/bin/python`. The GUI scripts support `--chromium /path/to/chrome` for an existing browser. Screenshots use synthetic server data. Native WebView differences still need the [manual desktop checks](releases.md#manual-checks).

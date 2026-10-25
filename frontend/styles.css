@@ -53,8 +53,8 @@
   --input: #3f3f46;
   --ring: #f4f4f5;
   --radius: 3px;
-  --success: #f4f4f5;
-  --success-background: #18181b;
+  --success: #4ade80;
+  --success-background: #102017;
   --sidebar: #0d0d0f;
   --sidebar-foreground: #a1a1aa;
   --sidebar-primary: #f4f4f5;
@@ -66,6 +66,8 @@
 }
 
 @theme inline {
+  --color-success: var(--success);
+  --color-success-background: var(--success-background);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -450,6 +452,8 @@
   font-family: var(--font-mono);
   font-size: 0.625rem;
   letter-spacing: 0.05em;
+  /* Invert text/background together so the language choice keeps its contrast. */
+  transition-property: border-color;
 }
 .language-switcher [data-state="on"] {
   background: var(--foreground);
@@ -945,12 +949,12 @@
   flex-shrink: 0;
 }
 .status-badge.connected {
-  color: var(--foreground);
-  border-color: var(--border-hover);
-  background: var(--muted);
+  color: var(--success);
+  border-color: var(--success);
+  background: var(--success-background);
 }
 .connected .status-dot {
-  background: var(--foreground);
+  background: var(--success);
 }
 .server-address {
   font-family: var(--font-mono);
@@ -1443,16 +1447,18 @@
   align-items: flex-start;
   gap: 0.625rem;
   padding: 0.75rem;
-  border: 1px solid var(--border-hover);
+  border: 1px solid var(--success);
   border-radius: 2px;
-  background: var(--muted);
+  background: var(--success-background);
 }
 .connection-success > svg {
+  color: var(--success);
   width: 1.125rem;
   height: 1.125rem;
   flex-shrink: 0;
 }
 .connection-success h3 {
+  color: var(--success);
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   font-weight: 400;
@@ -2843,6 +2849,10 @@
     animation: none !important;
     transition-duration: 0s !important;
     scroll-behavior: auto !important;
+  }
+  /* Loading indicators communicate ongoing work; keep only their rotation active. */
+  .spin {
+    animation: spin 1s linear infinite !important;
   }
 }
 

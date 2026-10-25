@@ -51,7 +51,7 @@
           return {...structuredClone(state.job), checkedAt:Math.floor(Date.now()/1000)+(state.serverClockOffset??0)};
         case "read_server_settings":
           state.settingsReads++;
-          return {setup:structuredClone(state.remoteSetup ?? server.setup), configuredCredentials:structuredClone(state.configuredCredentials), modelConfigured:state.job.modelConfigured, authorizedProviders:structuredClone(state.authorizedProviders), preparedProviders:structuredClone(state.preparedProviders), revision:state.revision, warnings:[]};
+          return {setup:structuredClone(state.remoteSetup ?? server.setup), configuredCredentials:structuredClone(state.configuredCredentials), modelConfigured:state.job.modelConfigured, modelTransportNeedsUpdate:state.modelTransportNeedsUpdate??false, authorizedProviders:structuredClone(state.authorizedProviders), preparedProviders:structuredClone(state.preparedProviders), revision:state.revision, warnings:[]};
         case "discover_provider_models": {
           state.modelQueries.push(structuredClone(args));
           const result = structuredClone(state.modelCatalog);
@@ -67,6 +67,7 @@
           state.lastSecrets=args.secrets;
           state.lastUpdate=args.update;
           state.remoteSetup=structuredClone(args.update.setup);
+          if(args.update.sections.includes('model')) state.modelTransportNeedsUpdate=false;
           state.configuredCredentials=[...new Set([...state.configuredCredentials, ...args.secrets.values.map(item=>item.name)])];
           state.revision+="-next";
           Object.assign(state.job,{jobId:"00000000-0000-4000-8000-"+String(state.applyCalls).padStart(12,"0"),operation:"configure",state:"running",step:"configure"});

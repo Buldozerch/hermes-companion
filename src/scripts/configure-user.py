@@ -39,6 +39,20 @@ def combined_catalog(catalog):
     return {**catalog, 'providers': catalog['providers'] + [item for item in catalog.get('additionalProviders', []) if item['id'] not in {row['id'] for row in catalog['providers']} ]}
 
 
+def custom_provider_name(base_url):
+    return 'companion-custom-' + hashlib.sha256(base_url.encode()).hexdigest()[:16]
+
+
+def companion_custom_entry(config, model):
+    """Recognize only the endpoint-scoped route that Companion owns."""
+    base_url = str(model.get('base_url') or '')
+    name = custom_provider_name(base_url)
+    if not base_url or model.get('provider') != name:
+        return None
+    entry = config_section(config, 'providers').get(name)
+    return entry if isinstance(entry, dict) and entry.get('base_url') == base_url else None
+
+
 def antigravity_prepared():
     try:
         from providers import get_provider_profile
@@ -90,8 +104,9 @@ def read_settings(fallback, catalog, config_api):
     model = config.get('model') or {}
     if isinstance(model, str):
         model = {'default': model}
+    custom_entry = companion_custom_entry(config, model)
     setup['deferModelSetup'] = (model.get('provider') == '' and not model.get('default')) or (not model and fallback.get('deferModelSetup', False))
-    provider = model.get('provider', setup['provider'])
+    provider = 'custom' if custom_entry is not None else model.get('provider', setup['provider'])
     provider = 'openrouter' if provider == 'openai' else provider
     if setup['deferModelSetup']:
         pass
@@ -105,7 +120,7 @@ def read_settings(fallback, catalog, config_api):
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError('The server model URL contains private parameters. Remove them through Hermes CLI before editing settings.')
     setup['baseUrl'] = base_url
-    setup['apiMode'] = model.get('api_mode') or 'chat_completions'
+    setup['apiMode'] = (custom_entry or {}).get('api_mode') or (custom_entry or {}).get('transport') or model.get('api_mode') or 'chat_completions'
     native_provider = next(item for item in catalog['providers'] if item['id'] == setup['provider'])
     key_env = model.get('key_env') or model.get('api_key_env') or ''
     setup['credentialEnv'] = key_env if key_env in native_provider['keyVars'] else ''
@@ -189,6 +204,7 @@ def read_settings(fallback, catalog, config_api):
     if setup['authMethod'] == 'oauth':
         ready = setup['provider'] in authorized
     return {'setup': setup, 'configuredCredentials': sorted(configured & allowed), 'modelConfigured': not setup['deferModelSetup'] and ready and bool(setup['model'].strip()),
+            'modelTransportNeedsUpdate': model.get('provider') == 'custom' and setup['apiMode'] == 'codex_responses',
             'authorizedProviders': authorized, 'preparedProviders': ['antigravity-oauth'] if antigravity_prepared() else [], 'revision': settings_revision(config, env), 'warnings': sorted(set(warnings))}
 
 
@@ -244,7 +260,9 @@ def configure(payload, catalog, config_api, plugin_sources=None):
             supplied[name] = legacy[field]
     merged_env = {**existing, **supplied}
     old_model = config.get('model', {})
-    if not deferred and 'model' in sections and isinstance(old_model, dict) and old_model.get('provider') == provider['id']:
+    same_provider = isinstance(old_model, dict) and (old_model.get('provider') == provider['id'] or
+                    (provider['id'] == 'custom' and companion_custom_entry(config, old_model) is not None))
+    if not deferred and 'model' in sections and same_provider:
         old_key = str(old_model.get('api_key') or '')
         old_value = merged_env.get(old_key[2:-1], '') if old_key.startswith('${') and old_key.endswith('}') else old_key
         target = custom_key if provider['id'] == 'custom' and old_model.get('base_url') == setup.get('baseUrl') else (setup.get('credentialEnv') or next(iter(provider['keyVars']), ''))
@@ -333,7 +351,7 @@ def configure(payload, catalog, config_api, plugin_sources=None):
         if isinstance(config.get('model'), str):
             config['model'] = {'default': config['model']}
         model = config_section(config, 'model', create=True)
-        for name in ['base_url', 'api_mode', 'api_key', 'key_env', 'api_key_env']:
+        for name in ['base_url', 'api_mode', 'transport', 'api_key', 'key_env', 'api_key_env', 'openai_runtime']:
             model.pop(name, None)
         if deferred:
             # Native canonicalization must not restore a skipped provider from legacy aliases.
@@ -354,6 +372,17 @@ def configure(payload, catalog, config_api, plugin_sources=None):
             model['api_mode'] = setup['apiMode']
         if not deferred and provider['id'] == 'custom' and merged_env.get(custom_key):
             model['api_key'] = '${' + custom_key + '}'
+        if not deferred and provider['id'] == 'custom':
+            # Hermes intentionally downgrades Responses on anonymous foreign endpoints.
+            # A named provider's transport is honored by CLI, gateway and explicit routes.
+            route_name = custom_provider_name(setup['baseUrl'])
+            route = config_section(config_section(config, 'providers', create=True), route_name, create=True)
+            for name in ['api_mode', 'api_key', 'api_key_env', 'key_env', 'key_cmd']:
+                route.pop(name, None)
+            route.update(name=route_name, base_url=setup['baseUrl'], transport=setup['apiMode'], default_model=setup['model'])
+            if merged_env.get(custom_key):
+                route['key_env'] = custom_key
+            model['provider'] = route_name
     config_section(config, 'gateway', create=True)['allow_all_users'] = False
     if not payload.get('sections'):
         config['max_live_sessions'] = 2

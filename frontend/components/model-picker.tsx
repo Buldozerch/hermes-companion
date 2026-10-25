@@ -131,7 +131,7 @@ export function ModelPicker({
           disabled={!canDiscover || busy}
           onClick={() => void discover()}
         >
-          <RefreshCw data-icon="inline-start" />
+          <RefreshCw data-icon="inline-start" className={busy ? "spin" : undefined} />
           {t(busy ? "Loading models…" : "Refresh models")}
         </Button>
       </div>
