@@ -24,7 +24,7 @@ export const serviceKeys: Record<string, { name: string; url: string }> = {
 };
 
 export function modelKey(setup: SetupOptions): string {
-  if (setup.authMethod === "oauth") return "";
+  if (setup.deferModelSetup || setup.authMethod === "oauth") return "";
   const preset = compatibleProviders.find((item) => item.id === setup.providerPreset);
   if (setup.provider === "custom") return preset?.keyVar || "COMPANION_CUSTOM_API_KEY";
   const provider = selectedProvider(setup.provider);
@@ -38,13 +38,13 @@ export function activeCredentialNames(setup: SetupOptions): Set<string> {
   const key = modelKey(setup);
   if (key) names.add(key);
   const add = (...items: string[]) => items.forEach((item) => names.add(item));
-  if (setup.provider === "bedrock")
+  if (!setup.deferModelSetup && setup.provider === "bedrock")
     add("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_REGION");
-  if (setup.provider === "vertex")
+  if (!setup.deferModelSetup && setup.provider === "vertex")
     add("GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION", "GOOGLE_SERVICE_ACCOUNT_JSON");
-  if (setup.provider === "qwen-oauth") add("QWEN_AUTH_JSON");
-  if (setup.provider === "copilot-acp") add("COPILOT_GITHUB_TOKEN");
-  if (setup.provider === "moa")
+  if (!setup.deferModelSetup && setup.provider === "qwen-oauth") add("QWEN_AUTH_JSON");
+  if (!setup.deferModelSetup && setup.provider === "copilot-acp") add("COPILOT_GITHUB_TOKEN");
+  if (!setup.deferModelSetup && setup.provider === "moa")
     for (const provider of setupCatalog.providers) for (const name of provider.keyVars) add(name);
   for (const channel of setupCatalog.channels.filter((item) => setup.channels.includes(item.id)))
     for (const field of channel.fields) add(field.name);
@@ -118,7 +118,7 @@ export function validateSetup(
           errors[`credential-${allowlists[0].name}`] = "Set an allowed-user list for this channel.";
       }
   }
-  if (!section || section === "model") {
+  if ((!section || section === "model") && !setup.deferModelSetup) {
     if (!setup.model.trim() && !(deferModel && setup.provider === "antigravity-oauth"))
       errors["model-name"] = "Enter the exact model ID.";
     const provider = selectedProvider(setup.provider);
@@ -152,7 +152,7 @@ export function validateSetup(
   if (!section || section === "services") {
     if (
       setup.tools.includes("tts") &&
-      !(setup.ttsProvider === "xai" && setup.provider === "xai-oauth")
+      !(setup.ttsProvider === "xai" && !setup.deferModelSetup && setup.provider === "xai-oauth")
     )
       requireKey(
         setupCatalog.ttsProviders.find((item) => item.id === setup.ttsProvider)?.keyVar ?? "",
@@ -160,7 +160,7 @@ export function validateSetup(
       );
     if (
       setup.tools.includes("stt") &&
-      !(setup.sttProvider === "xai" && setup.provider === "xai-oauth")
+      !(setup.sttProvider === "xai" && !setup.deferModelSetup && setup.provider === "xai-oauth")
     )
       requireKey(
         setupCatalog.sttProviders.find((item) => item.id === setup.sttProvider)?.keyVar ?? "",

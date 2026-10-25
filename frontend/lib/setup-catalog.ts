@@ -38,6 +38,7 @@ export const browserLoginProviders = new Set([
 ]);
 export function usesBrowserAuth(setup: SetupOptions) {
   return (
+    !setup.deferModelSetup &&
     browserLoginProviders.has(setup.provider) &&
     (setup.authMethod === "oauth" ||
       ["nous", "openai-codex", "minimax-oauth", "xai-oauth", "antigravity-oauth"].includes(
@@ -64,7 +65,9 @@ export const defaultTools = [...baseTools, "tts", "stt"];
 export const compatibleProviders = source.compatibleProviders;
 
 export function normalizeSetup(setup: Partial<SetupOptions>): SetupOptions {
+  const pending = setup.deferModelSetup ?? (!setup.provider && !setup.model);
   return {
+    deferModelSetup: pending,
     provider: setup.provider === "openai" ? "openai-api" : (setup.provider ?? "openrouter"),
     authMethod: [
       "nous",
@@ -78,7 +81,7 @@ export function normalizeSetup(setup: Partial<SetupOptions>): SetupOptions {
       : (setup.authMethod ?? "api_key"),
     providerPreset: setup.providerPreset ?? "",
     allowUnauthenticatedModel: setup.allowUnauthenticatedModel ?? false,
-    model: setup.model ?? "anthropic/claude-sonnet-4.6",
+    model: pending ? "" : (setup.model ?? "anthropic/claude-sonnet-4.6"),
     baseUrl: setup.baseUrl ?? "",
     apiMode: setup.apiMode ?? "chat_completions",
     credentialEnv: setup.credentialEnv ?? "",

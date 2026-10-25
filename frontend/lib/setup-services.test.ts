@@ -37,11 +37,32 @@ describe("guided installation requirements", () => {
     ).toHaveProperty("credential-TELEGRAM_ALLOWED_USERS");
   });
   it("requires model and Groq keys while keyless services need no dummy credentials", () => {
-    const setup = normalizeSetup({ channels: ["telegram"] });
+    const setup = normalizeSetup({
+      provider: "openrouter",
+      model: "selected/model",
+      channels: ["telegram"],
+    });
     expect(validateSetup(setup, telegram)).toHaveProperty("credential-OPENROUTER_API_KEY");
     expect(
       validateSetup(setup, { ...telegram, OPENROUTER_API_KEY: "test", GROQ_API_KEY: "test" }),
     ).toEqual({});
+  });
+  it("starts without an implicit provider and installs with keyless services", () => {
+    const setup = normalizeSetup({ tools: [...baseTools, "tts"] });
+    expect(setup.deferModelSetup).toBe(true);
+    expect(setup.model).toBe("");
+    expect(validateSetup(setup, {})).toEqual({});
+    expect(activeCredentialNames(setup).has("OPENROUTER_API_KEY")).toBe(false);
+  });
+  it("does not require an abandoned provider key after deferring the model", () => {
+    const setup = normalizeSetup({
+      provider: "openrouter",
+      model: "old/model",
+      deferModelSetup: true,
+      tools: [],
+    });
+    expect(validateSetup(setup, {}, false, "model")).toEqual({});
+    expect([...activeCredentialNames(setup)]).toEqual([]);
   });
   it("requires a custom gateway key unless keyless access was explicitly selected", () => {
     const setup = normalizeSetup({

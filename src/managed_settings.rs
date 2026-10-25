@@ -76,6 +76,7 @@ impl SettingsUpdate {
         for section in &self.sections {
             let fields: &[&str] = match section {
                 SettingsSection::Model => &[
+                    "deferModelSetup",
                     "provider",
                     "authMethod",
                     "providerPreset",
@@ -102,7 +103,9 @@ impl SettingsUpdate {
             }
         }
         let merged: SetupOptions = serde_json::from_value(merged)?;
-        if self.sections.contains(&SettingsSection::Model) && merged.model.trim().is_empty() {
+        if self.sections.contains(&SettingsSection::Model)
+            && (merged.defer_model_setup || merged.model.trim().is_empty())
+        {
             return Err(AppError::new(
                 "validation",
                 "Select a model before applying these settings.",
@@ -145,6 +148,28 @@ mod tests {
         assert_eq!(merged.model, "new-model");
         assert_eq!(merged.tools, current.setup.tools);
         assert_eq!(merged.channels, current.setup.channels);
+        Ok(())
+    }
+
+    #[test]
+    fn first_model_connection_clears_deferral_without_touching_tools() -> Result<()> {
+        let mut current = snapshot();
+        current.setup.defer_model_setup = true;
+        current.setup.model.clear();
+        let mut requested = current.setup.clone();
+        requested.defer_model_setup = false;
+        requested.provider = "deepseek".into();
+        requested.model = "chosen-model".into();
+        let merged = SettingsUpdate {
+            setup: requested,
+            sections: vec![SettingsSection::Model],
+            revision: current.revision.clone(),
+        }
+        .merge(&current)?;
+        assert!(!merged.defer_model_setup);
+        assert_eq!(merged.provider, "deepseek");
+        assert_eq!(merged.model, "chosen-model");
+        assert_eq!(merged.tools, current.setup.tools);
         Ok(())
     }
 

@@ -103,6 +103,8 @@ impl Database {
             connection,
             report: None,
             setup: SetupOptions {
+                defer_model_setup: true,
+                model: String::new(),
                 channels: vec!["telegram".into()],
                 telegram: true,
                 browser: true,
@@ -363,11 +365,14 @@ mod tests {
             port: 22,
             username: "root".into(),
         })?;
+        assert!(saved.setup.defer_model_setup);
+        assert!(saved.setup.model.is_empty());
+        saved.setup.validate()?;
         drop(db);
-        assert_eq!(
-            Database::open(&path)?.server(&saved.id)?.connection.host,
-            "example.com"
-        );
+        let restored = Database::open(&path)?.server(&saved.id)?;
+        assert_eq!(restored.connection.host, "example.com");
+        assert!(restored.setup.defer_model_setup);
+        assert!(restored.setup.model.is_empty());
         Ok(())
     }
 }

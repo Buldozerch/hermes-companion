@@ -3,6 +3,13 @@ import { normalizeSetup, selectedProvider, setupCatalog } from "./setup-catalog"
 import { translate } from "./i18n";
 
 describe("setup compatibility", () => {
+  it("keeps legacy explicit model selections connected to their original provider", () => {
+    expect(normalizeSetup({ provider: "anthropic", model: "existing-model" })).toMatchObject({
+      deferModelSetup: false,
+      provider: "anthropic",
+      model: "existing-model",
+    });
+  });
   it("migrates the old OpenAI ID away from the upstream OpenRouter alias", () => {
     expect(normalizeSetup({ provider: "openai" }).provider).toBe("openai-api");
     expect(selectedProvider("openai-api").keyVars).toContain("OPENAI_API_KEY");

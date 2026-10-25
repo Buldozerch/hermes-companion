@@ -123,6 +123,8 @@ pub enum HostKeyStatus {
 #[serde(rename_all = "camelCase", default)]
 pub struct SetupOptions {
     pub provider: String,
+    #[serde(default)]
+    pub defer_model_setup: bool,
     pub auth_method: String,
     pub provider_preset: String,
     pub allow_unauthenticated_model: bool,
@@ -148,6 +150,7 @@ impl Default for SetupOptions {
     fn default() -> Self {
         Self {
             provider: "openrouter".into(),
+            defer_model_setup: false,
             auth_method: "api_key".into(),
             provider_preset: String::new(),
             allow_unauthenticated_model: false,

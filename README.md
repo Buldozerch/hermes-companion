@@ -31,7 +31,7 @@ These are desktop applications. The browser preview lets you explore the interfa
 
 - A fresh Ubuntu 24.04 LTS VPS with SSH access. Recommended: **2 vCPU, 4 GB RAM and 25 GB disk**. Smaller servers receive resource recommendations; less than 1 GB free disk blocks installation.
 - A root login or an account with passwordless `sudo` for preparing the server.
-- An API key or a supported provider account. Browser sign-in happens after Hermes is installed.
+- An API key or a supported provider account when connecting a model. You can install Hermes first and connect a model later; browser sign-in happens after installation.
 - A Telegram bot token and your numeric Telegram ID if you choose Telegram. The app links to the tools for getting both.
 
 The app includes links to [VDSina](https://www.vdsina.com/?partner=62n73usqa1jp) and [HIP Hosting](https://hip.hosting/?code=9f78107d10447a5f9b47). You can also use a server you already own that meets the requirements. VPS rental and paid provider services are billed by their providers.
@@ -40,7 +40,7 @@ The app includes links to [VDSina](https://www.vdsina.com/?partner=62n73usqa1jp)
 
 1. **Add your server.** Follow the hosting instructions or select that you already have a server.
 2. **Connect securely.** Enter SSH details and verify the server fingerprint before sending credentials.
-3. **Choose your setup.** Configure Telegram, the model provider, and optional voice/search/image services. Core agent tools are enabled by default.
+3. **Choose your setup.** Configure Telegram and optional voice/search/image services. Connect a model provider now or after installation; no model API key is needed if you defer this step. Core agent tools are enabled by default.
 4. **Install Hermes.** Follow live progress while the app prepares Ubuntu, creates the dedicated `hermes` user and installs the latest stable Hermes release. The remote job continues if the app closes.
 5. **Manage your agent.** Switch models or providers, replace keys, change channels and tools, or inspect service status and logs. Settings are applied without reinstalling Hermes.
 

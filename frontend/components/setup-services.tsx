@@ -232,7 +232,9 @@ export function SetupServices({
           ]}
         />
         {tts?.keyVar &&
-          (tts.keyVar === "XAI_API_KEY" && setup.provider === "xai-oauth" ? (
+          (tts.keyVar === "XAI_API_KEY" &&
+          !setup.deferModelSetup &&
+          setup.provider === "xai-oauth" ? (
             <p className="setup-secondary">
               {t("Uses your xAI account once authorized. No separate API key is required.")}
             </p>
@@ -292,7 +294,9 @@ export function SetupServices({
           ]}
         />
         {stt?.keyVar &&
-          (stt.keyVar === "XAI_API_KEY" && setup.provider === "xai-oauth" ? (
+          (stt.keyVar === "XAI_API_KEY" &&
+          !setup.deferModelSetup &&
+          setup.provider === "xai-oauth" ? (
             <p className="setup-secondary">
               {t("Uses your xAI account once authorized. No separate API key is required.")}
             </p>

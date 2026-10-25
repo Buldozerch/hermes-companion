@@ -299,11 +299,17 @@ export function HermesManagement({
           <dl className="management-summary">
             <div>
               <dt>{t("Provider")}</dt>
-              <dd>{selectedProvider(snapshot.setup.provider).name}</dd>
+              <dd>
+                {snapshot.setup.deferModelSetup
+                  ? t("Not configured")
+                  : selectedProvider(snapshot.setup.provider).name}
+              </dd>
             </div>
             <div>
               <dt>{t("Model ID")}</dt>
-              <dd translate="no">{snapshot.setup.model}</dd>
+              <dd translate="no">
+                {snapshot.setup.deferModelSetup ? t("Not configured") : snapshot.setup.model}
+              </dd>
             </div>
             <div>
               <dt>{t("Version")}</dt>

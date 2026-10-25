@@ -63,7 +63,8 @@ impl DeploymentSecrets {
                     .find(|item| item["id"].as_str() == Some(setup.provider.as_str()))
             })
             .ok_or_else(|| AppError::new("validation", "Select a supported model provider."))?;
-        if provider["authType"] == "api_key"
+        if !setup.defer_model_setup
+            && provider["authType"] == "api_key"
             && setup.auth_method != "oauth"
             && setup.provider != "lmstudio"
             && self.api_key.trim().is_empty()
@@ -156,7 +157,8 @@ impl DeploymentSecrets {
                 .and_then(|item| item["keyVar"].as_str())
                 .filter(|key| !key.is_empty())
             {
-                if key == "XAI_API_KEY" && setup.provider == "xai-oauth" {
+                if key == "XAI_API_KEY" && !setup.defer_model_setup && setup.provider == "xai-oauth"
+                {
                     continue;
                 }
                 let mut names = vec![key];
@@ -645,6 +647,31 @@ pub async fn service_action(session: &SshSession, action: &str) -> Result<Deploy
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn installation_without_a_model_needs_no_model_credentials() -> Result<()> {
+        let setup = SetupOptions {
+            defer_model_setup: true,
+            model: String::new(),
+            tools: vec!["tts".into(), "web".into()],
+            ..Default::default()
+        };
+        setup.validate()?;
+        DeploymentSecrets::default().require_installation_credentials(&setup)
+    }
+    #[test]
+    fn deferring_the_model_does_not_bypass_selected_service_keys() {
+        let setup = SetupOptions {
+            defer_model_setup: true,
+            model: String::new(),
+            tools: vec!["stt".into()],
+            ..Default::default()
+        };
+        assert!(
+            DeploymentSecrets::default()
+                .require_installation_credentials(&setup)
+                .is_err()
+        );
+    }
     #[test]
     fn a_new_installation_requires_the_selected_model_key() {
         let setup = SetupOptions {

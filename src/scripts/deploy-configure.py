@@ -10,7 +10,7 @@ home = Path('/home/hermes/.hermes')
 account = pwd.getpwnam('hermes')
 payload = json.loads(Path('input.json').read_text())
 setup = payload['setup']
-if setup['provider'] == 'antigravity-oauth':
+if not setup.get('deferModelSetup') and setup['provider'] == 'antigravity-oauth':
     subprocess.run(['python3', 'prepare-provider.py'], check=True)
 credentials = payload['secrets']
 sections = set(payload.get('sections', ['model', 'channels', 'services', 'tools']))
@@ -35,7 +35,7 @@ channel_extras = {'telegram': 'telegram', 'discord': 'discord', 'slack': 'slack'
 for channel in setup['channels']:
     if 'channels' in sections and channel in channel_extras:
         extras.add(channel_extras[channel])
-if 'model' in sections and setup['provider'] in {'bedrock', 'vertex'}:
+if 'model' in sections and not setup.get('deferModelSetup') and setup['provider'] in {'bedrock', 'vertex'}:
     extras.add(setup['provider'])
 for tool, collection, selected in [('tts', 'ttsProviders', 'ttsProvider'), ('stt', 'sttProviders', 'sttProvider')]:
     if service_dependencies and tool in setup['tools']:
@@ -65,7 +65,7 @@ if extras:
 for tool, packages in [('browser', ['agent-browser', 'chromium']), ('computer_use', ['cua-driver'])]:
     if service_dependencies and tool in setup['tools']:
         subprocess.run(run_as_user + [launcher, 'pm', 'install', *packages], check=True)
-if 'model' in sections and setup['provider'] == 'copilot-acp':
+if 'model' in sections and not setup.get('deferModelSetup') and setup['provider'] == 'copilot-acp':
     subprocess.run(run_as_user + [launcher, 'pm', 'install', 'node'], check=True)
     node_env = json.loads(subprocess.check_output(run_as_user + [launcher, 'pm', 'env', 'node'], text=True))
     # Install the provider's official ACP CLI into the service user's PATH.

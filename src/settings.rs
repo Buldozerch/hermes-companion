@@ -145,13 +145,15 @@ impl SetupOptions {
                 ));
             }
         }
-        if self.provider == "moa" && self.moa_config.is_empty() {
+        if !self.defer_model_setup && self.provider == "moa" && self.moa_config.is_empty() {
             return Err(AppError::new(
                 "validation",
                 "Configure Mixture of Agents reference models and an aggregator.",
             ));
         }
-        if (self.model.trim().is_empty() && self.provider != "antigravity-oauth")
+        if (self.model.trim().is_empty()
+            && self.provider != "antigravity-oauth"
+            && !self.defer_model_setup)
             || self.model.len() > 200
             || !catalog
                 .providers
@@ -163,7 +165,7 @@ impl SetupOptions {
                 "Select a provider and enter a model.",
             ));
         }
-        if self.provider == "custom" && self.base_url.is_empty() {
+        if !self.defer_model_setup && self.provider == "custom" && self.base_url.is_empty() {
             return Err(AppError::new(
                 "validation",
                 "Enter the base URL of your custom provider.",

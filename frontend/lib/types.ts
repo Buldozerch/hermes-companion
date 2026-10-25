@@ -7,6 +7,7 @@ export interface ServerDraft {
 export interface SetupOptions {
   authMethod: "api_key" | "oauth";
   provider: string;
+  deferModelSetup: boolean;
   providerPreset: string;
   allowUnauthenticatedModel: boolean;
   model: string;

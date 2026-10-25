@@ -22,8 +22,7 @@ import type {
 export const desktop = isTauri();
 const previewKey = "hermes-companion.preview.v1";
 export const defaultSetup: SetupOptions = normalizeSetup({
-  provider: "openrouter",
-  model: "anthropic/claude-sonnet-4.6",
+  deferModelSetup: true,
   channels: ["telegram"],
   updateSystem: true,
 });

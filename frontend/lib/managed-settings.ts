@@ -10,6 +10,7 @@ export const settingsSections: { id: SettingsSection; label: string }[] = [
 ];
 const fields: Record<SettingsSection, (keyof SetupOptions)[]> = {
   model: [
+    "deferModelSetup",
     "provider",
     "authMethod",
     "providerPreset",

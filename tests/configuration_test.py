@@ -45,6 +45,53 @@ def credentials(data, **values):
 
 
 class ConfigurationTest(unittest.TestCase):
+    def test_deferred_model_needs_no_fake_key_and_does_not_write_openrouter_defaults(self):
+        store = ConfigStore({'provider': 'openrouter', 'model': {'provider': 'openrouter', 'default': 'anthropic/claude-sonnet-4.6', 'name': 'legacy-model'}})
+        data = payload(deferModelSetup=True, model='')
+        result = configure(data, catalog, store)
+        self.assertFalse(result['modelConfigured'])
+        self.assertEqual(store.config['model']['provider'], '')
+        self.assertEqual(store.config['model']['default'], '')
+        self.assertNotIn('provider', store.config)
+        self.assertNotIn('name', store.config['model'])
+        self.assertNotIn('OPENROUTER_API_KEY', store.env)
+        snapshot = read_settings(data['setup'], catalog, store)
+        self.assertTrue(snapshot['setup']['deferModelSetup'])
+        self.assertFalse(snapshot['modelConfigured'])
+        self.assertEqual(snapshot['warnings'], [])
+
+    def test_cli_model_selection_is_visible_after_deferred_installation(self):
+        store = ConfigStore({'model': {'provider': 'anthropic', 'default': 'cli-model'}}, {'ANTHROPIC_API_KEY': 'private-key'})
+        snapshot = read_settings(payload(deferModelSetup=True, model='')['setup'], catalog, store)
+        self.assertFalse(snapshot['setup']['deferModelSetup'])
+        self.assertEqual(snapshot['setup']['provider'], 'anthropic')
+        self.assertEqual(snapshot['setup']['model'], 'cli-model')
+        self.assertTrue(snapshot['modelConfigured'])
+
+    def test_services_can_be_changed_while_model_connection_is_pending(self):
+        store = ConfigStore()
+        data = payload(deferModelSetup=True, model='', searchBackend='ddgs', extractBackend='builtin')
+        configure(data, catalog, store)
+        data.update(sections=['services', 'tools'], expectedRevision=helper['settings_revision'](store.config, store.env))
+        data['setup']['tools'] = ['file', 'tts']
+        result = configure(data, catalog, store)
+        self.assertFalse(result['modelConfigured'])
+        self.assertEqual(store.config['model'], {'provider': '', 'default': ''})
+        self.assertEqual(store.config['tts']['provider'], 'edge')
+        self.assertNotIn('OPENROUTER_API_KEY', store.env)
+
+    def test_model_can_be_connected_after_deferred_installation(self):
+        store = ConfigStore()
+        data = payload(deferModelSetup=True, model='')
+        configure(data, catalog, store)
+        data['setup'].update(deferModelSetup=False, model='chosen-model')
+        data.update(sections=['model'], expectedRevision=helper['settings_revision'](store.config, store.env))
+        credentials(data, OPENROUTER_API_KEY='private-real-key')
+        result = configure(data, catalog, store)
+        self.assertTrue(result['modelConfigured'])
+        self.assertEqual(store.config['model']['default'], 'chosen-model')
+        self.assertFalse(read_settings(data['setup'], catalog, store)['setup']['deferModelSetup'])
+
     def test_antigravity_installs_without_inventing_a_model_or_api_key(self):
         store = ConfigStore()
         data = payload(provider='antigravity-oauth', authMethod='oauth', model='')

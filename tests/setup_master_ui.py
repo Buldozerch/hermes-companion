@@ -19,8 +19,44 @@ def accessible(page):
  violations=page.evaluate("async()=> (await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))")
  assert not violations,violations
 
+def deferred_model_installation(browser):
+ page=browser.new_page(viewport={'width':1440,'height':1050})
+ setup=dict(deferModelSetup=True,model='',channels=[],tools=core+['tts'])
+ pending_fixture=Path('tests/fixtures/desktop-mock.js').read_text()+"\nObject.assign(window.__QA__.workspace.servers[0].setup,"+json.dumps(setup)+"); window.__QA__.configuredCredentials=[];"
+ page.add_init_script(pending_fixture);errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
+ page.goto(args.url);page.wait_for_load_state('networkidle')
+ page.get_by_role('button',name='Connect to server',exact=True).click();page.get_by_label('Server password').fill('qa-only-password');page.get_by_role('button',name='Check connection',exact=True).click();page.get_by_role('button',name='Set up Hermes',exact=True).click()
+ page.get_by_role('button',name='Continue to model',exact=True).click()
+ expect(page.get_by_role('combobox',name='All model providers',exact=True)).to_contain_text('Choose a provider')
+ expect(page.get_by_text('No model connected yet',exact=True)).to_be_visible()
+ expect(page.locator('#credential-OPENROUTER_API_KEY')).to_have_count(0);expect(page.locator('#model-name')).to_have_count(0)
+ page.get_by_role('radio',name='OpenRouter',exact=True).click();page.get_by_role('button',name='Continue to services',exact=True).click()
+ expect(page.locator('#credential-OPENROUTER_API_KEY')).to_have_attribute('aria-invalid','true')
+ page.get_by_role('button',name='Set up the model after installation',exact=True).click()
+ language(page,'ru');expect(page.get_by_text(ru['No model connected yet'],exact=True)).to_be_visible();accessible(page);language(page,'en')
+ page.get_by_role('button',name='Continue to services',exact=True).click();page.get_by_role('button',name='Finish setup and install',exact=True).click()
+ expect(page.get_by_role('progressbar')).to_be_visible()
+ assert page.evaluate('window.__QA__.installCalls')==1
+ assert page.evaluate('window.__QA__.lastSecrets.values')==[]
+ assert page.evaluate('window.__QA__.workspace.servers[0].setup.deferModelSetup')
+ assert page.evaluate('window.__QA__.workspace.servers[0].setup.model')==''
+ page.evaluate("Object.assign(window.__QA__.job,{state:'succeeded',step:'complete',installedVersion:'v9.8.7',serviceInstalled:true,serviceActive:true,apiHealthy:true,modelConfigured:false})")
+ page.get_by_role('button',name='Workspace',exact=True).click();page.get_by_role('button',name='Manage Hermes',exact=True).click(timeout=15000)
+ expect(page.get_by_text('No model connected yet',exact=True)).to_be_visible()
+ expect(page.locator('#credential-OPENROUTER_API_KEY')).to_have_count(0);expect(page.locator('#model-name')).to_have_count(0)
+ page.get_by_role('radio',name='DeepSeek',exact=True).click();page.get_by_role('button',name='Apply changes',exact=True).click()
+ expect(page.locator('#credential-DEEPSEEK_API_KEY')).to_have_attribute('aria-invalid','true')
+ page.locator('#credential-DEEPSEEK_API_KEY').fill('qa-deepseek-only-key');page.get_by_role('button',name='Apply changes',exact=True).click()
+ assert page.evaluate('window.__QA__.lastUpdate.sections')==['model']
+ assert page.evaluate('window.__QA__.lastUpdate.setup.deferModelSetup') is False
+ assert page.evaluate('window.__QA__.lastUpdate.setup.provider')=='deepseek'
+ assert [item['name'] for item in page.evaluate('window.__QA__.lastSecrets.values')]==['DEEPSEEK_API_KEY']
+ assert not errors,errors
+ page.close()
+
 with sync_playwright() as p:
  browser=p.chromium.launch(headless=True,executable_path=args.chromium)
+ deferred_model_installation(browser)
  page=browser.new_page(viewport={'width':1440,'height':1050});page.add_init_script(fixture);errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
  page.goto(args.url);page.wait_for_load_state('networkidle')
  page.get_by_role('button',name='Connect to server',exact=True).click();page.get_by_label('Server password').fill('qa-ssh-password');page.get_by_role('button',name='Check connection',exact=True).click();page.get_by_role('button',name='Set up Hermes',exact=True).click()
@@ -69,4 +105,4 @@ with sync_playwright() as p:
  assert 'qa-model-key' not in page.content();assert 'qa-model-key' not in page.evaluate('JSON.stringify(localStorage)')
  setup=page.evaluate('window.__QA__.workspace.servers[0].setup');assert set(core)<=set(setup['tools']);assert setup['searchBackend']=='brave-free' and setup['extractBackend']=='builtin' and setup['imageProvider']=='replicate'
  assert not errors,errors
- browser.close();print('PASS: Telegram validation, 53 native providers plus compatible presets, service radios, keys, full core tools, direct install, secret isolation, EN/RU, mobile and accessibility.')
+ browser.close();print('PASS: keyless model deferral, post-install provider connection, Telegram validation, 53 native providers plus compatible presets, service radios, keys, full core tools, direct install, secret isolation, EN/RU, mobile and accessibility.')

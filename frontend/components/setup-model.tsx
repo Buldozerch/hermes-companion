@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Check, ChevronsUpDown, Search } from "lucide-react";
 import { useLocale } from "@/components/locale-provider";
 import { useSetupCredentials } from "@/components/setup-credentials";
-import { ExternalLink } from "@/components/shared";
+import { ExternalLink, Notice } from "@/components/shared";
 import {
   CredentialFile,
   CredentialInput,
@@ -79,8 +79,8 @@ export function SetupModel({
   const [prepareError, setPrepareError] = useState<unknown>(null);
   const provider = selectedProvider(setup.provider);
   const preset = compatibleProviders.find((item) => item.id === setup.providerPreset);
-  const selected = preset ? `preset:${preset.id}` : setup.provider;
-  const name = preset?.name ?? provider.name;
+  const selected = setup.deferModelSetup ? "" : preset ? `preset:${preset.id}` : setup.provider;
+  const name = setup.deferModelSetup ? "Choose a provider" : (preset?.name ?? provider.name);
   const key = modelKey(setup);
   const credentials = useSetupCredentials(server.id);
   const models = preset?.models ?? provider.models;
@@ -96,6 +96,7 @@ export function SetupModel({
       const next = compatibleProviders.find((item) => `preset:${item.id}` === id);
       if (!next) return;
       change({
+        deferModelSetup: false,
         provider: "custom",
         authMethod: "api_key",
         providerPreset: next.id,
@@ -108,6 +109,7 @@ export function SetupModel({
     } else {
       const next = selectedProvider(id);
       change({
+        deferModelSetup: false,
         provider: next.id,
         authMethod: [
           "nous",
@@ -135,6 +137,28 @@ export function SetupModel({
         <h3>{t("Choose your agent's brain")}</h3>
         <p>{t("Connect a model provider or use your own OpenAI-compatible gateway.")}</p>
       </div>
+      {!installed && !setup.deferModelSetup && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            change({
+              deferModelSetup: true,
+              provider: "openrouter",
+              model: "",
+              baseUrl: "",
+              providerPreset: "",
+              credentialEnv: "",
+              moaConfig: "",
+              authMethod: "api_key",
+              allowUnauthenticatedModel: false,
+            })
+          }
+        >
+          {t("Set up the model after installation")}
+        </Button>
+      )}
       <FieldGroup>
         <Field>
           <FieldLabel>{t("Quick select")}</FieldLabel>
@@ -226,278 +250,297 @@ export function SetupModel({
             )}
           </FieldDescription>
         </Field>
-        {[
-          "openai-api",
-          "openai-codex",
-          "anthropic",
-          "openrouter",
-          "gemini",
-          "antigravity-oauth",
-        ].includes(provider.id) && (
-          <Field>
-            <FieldLabel>{t("Connection method")}</FieldLabel>
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              value={oauth ? "oauth" : "api_key"}
-              className="provider-auth-method"
-              aria-label={t("Provider authentication")}
-              onValueChange={(value) => {
-                if (!value) return;
-                if (["openai-api", "openai-codex"].includes(provider.id)) {
-                  select(value === "oauth" ? "openai-codex" : "openai-api");
-                  if (setup.model) change({ model: setup.model });
-                } else if (["gemini", "antigravity-oauth"].includes(provider.id)) {
-                  select(value === "oauth" ? "antigravity-oauth" : "gemini");
-                } else change({ authMethod: value as "api_key" | "oauth", credentialEnv: "" });
-              }}
-            >
-              <ToggleGroupItem value="api_key">{t("API key")}</ToggleGroupItem>
-              <ToggleGroupItem value="oauth">
-                {t(
-                  ["openai-api", "openai-codex"].includes(provider.id)
-                    ? "ChatGPT subscription (OAuth)"
-                    : ["gemini", "antigravity-oauth"].includes(provider.id)
-                      ? "Google Antigravity (OAuth)"
-                      : "Browser sign-in (OAuth)",
-                )}
-              </ToggleGroupItem>
-            </ToggleGroup>
-            {provider.id === "anthropic" && oauth && (
-              <FieldDescription>
-                {t(
-                  "Anthropic account access requires Claude Max with extra usage credits. An API key remains available as a separate option.",
-                )}
-              </FieldDescription>
-            )}
-          </Field>
-        )}
-        {oauth && (
-          <div className="setup-auth-status" id="model-auth" tabIndex={-1}>
-            <Badge variant="outline">
-              {t(installed && accountAuthorized ? "Authorized" : "Authorization required")}
-            </Badge>
-            {provider.id === "antigravity-oauth" &&
-            installed &&
-            !preparedProviders.includes(provider.id) ? (
-              <div className="provider-preparation">
-                <strong>{t("Prepare Google Antigravity")}</strong>
-                <p>
-                  {t(
-                    "Install the official Google agy CLI and the community Hermes plugin on this server. Then sign in to Google. This briefly restarts Hermes.",
-                  )}
-                </p>
-                <Button
-                  type="button"
+        {setup.deferModelSetup ? (
+          <Notice title="No model connected yet">
+            <p>
+              {t(
+                installed
+                  ? "Choose a provider above, connect your account or API key, then apply changes."
+                  : "You can install Hermes without a model API key. Choose a provider above now, or connect one in Hermes settings after installation. The agent can answer once a model is connected.",
+              )}
+            </p>
+          </Notice>
+        ) : (
+          <>
+            {[
+              "openai-api",
+              "openai-codex",
+              "anthropic",
+              "openrouter",
+              "gemini",
+              "antigravity-oauth",
+            ].includes(provider.id) && (
+              <Field>
+                <FieldLabel>{t("Connection method")}</FieldLabel>
+                <ToggleGroup
+                  type="single"
                   variant="outline"
-                  disabled={authDisabled || preparing || !onPreparing}
-                  onClick={async () => {
-                    setPreparing(true);
-                    setPrepareError(null);
-                    try {
-                      onPreparing?.(await api.prepareProvider(server.id, provider.id));
-                    } catch (error) {
-                      setPrepareError(error);
-                    } finally {
-                      setPreparing(false);
-                    }
+                  value={oauth ? "oauth" : "api_key"}
+                  className="provider-auth-method"
+                  aria-label={t("Provider authentication")}
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    if (["openai-api", "openai-codex"].includes(provider.id)) {
+                      select(value === "oauth" ? "openai-codex" : "openai-api");
+                      if (setup.model) change({ model: setup.model });
+                    } else if (["gemini", "antigravity-oauth"].includes(provider.id)) {
+                      select(value === "oauth" ? "antigravity-oauth" : "gemini");
+                    } else change({ authMethod: value as "api_key" | "oauth", credentialEnv: "" });
                   }}
                 >
-                  {t(preparing ? "Preparing provider…" : "Install Antigravity support")}
-                </Button>
-                {!!prepareError && (
-                  <p role="alert" lang="en" translate="no">
-                    {errorMessage(prepareError)}
+                  <ToggleGroupItem value="api_key">{t("API key")}</ToggleGroupItem>
+                  <ToggleGroupItem value="oauth">
+                    {t(
+                      ["openai-api", "openai-codex"].includes(provider.id)
+                        ? "ChatGPT subscription (OAuth)"
+                        : ["gemini", "antigravity-oauth"].includes(provider.id)
+                          ? "Google Antigravity (OAuth)"
+                          : "Browser sign-in (OAuth)",
+                    )}
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                {provider.id === "anthropic" && oauth && (
+                  <FieldDescription>
+                    {t(
+                      "Anthropic account access requires Claude Max with extra usage credits. An API key remains available as a separate option.",
+                    )}
+                  </FieldDescription>
+                )}
+              </Field>
+            )}
+            {oauth && (
+              <div className="setup-auth-status" id="model-auth" tabIndex={-1}>
+                <Badge variant="outline">
+                  {t(installed && accountAuthorized ? "Authorized" : "Authorization required")}
+                </Badge>
+                {provider.id === "antigravity-oauth" &&
+                installed &&
+                !preparedProviders.includes(provider.id) ? (
+                  <div className="provider-preparation">
+                    <strong>{t("Prepare Google Antigravity")}</strong>
+                    <p>
+                      {t(
+                        "Install the official Google agy CLI and the community Hermes plugin on this server. Then sign in to Google. This briefly restarts Hermes.",
+                      )}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={authDisabled || preparing || !onPreparing}
+                      onClick={async () => {
+                        setPreparing(true);
+                        setPrepareError(null);
+                        try {
+                          onPreparing?.(await api.prepareProvider(server.id, provider.id));
+                        } catch (error) {
+                          setPrepareError(error);
+                        } finally {
+                          setPreparing(false);
+                        }
+                      }}
+                    >
+                      {t(preparing ? "Preparing provider…" : "Install Antigravity support")}
+                    </Button>
+                    {!!prepareError && (
+                      <p role="alert" lang="en" translate="no">
+                        {errorMessage(prepareError)}
+                      </p>
+                    )}
+                  </div>
+                ) : installed && (onAuthorized || setup.provider === server.setup.provider) ? (
+                  <ProviderSignIn
+                    key={provider.id}
+                    serverId={server.id}
+                    provider={provider.id}
+                    disabled={authDisabled}
+                    onAuthorized={onAuthorized}
+                    authorized={accountAuthorized}
+                  />
+                ) : (
+                  <p>
+                    {t(
+                      installed
+                        ? "Apply this provider, then sign in from the server panel."
+                        : "Install Hermes first. Then authorize this account from the server panel.",
+                    )}
                   </p>
                 )}
+                {errors["model-auth"] && <FieldError>{t(errors["model-auth"])}</FieldError>}
               </div>
-            ) : installed && (onAuthorized || setup.provider === server.setup.provider) ? (
-              <ProviderSignIn
-                key={provider.id}
+            )}
+            {!oauth && provider.keyVars.length > 1 && (
+              <Field>
+                <FieldLabel htmlFor="provider-credential-type">{t("Credential type")}</FieldLabel>
+                <select
+                  id="provider-credential-type"
+                  className="native-select"
+                  value={setup.credentialEnv || provider.keyVars[0]}
+                  onChange={(event) => change({ credentialEnv: event.target.value })}
+                >
+                  {provider.keyVars.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            {key && (
+              <CredentialInput
                 serverId={server.id}
-                provider={provider.id}
-                disabled={authDisabled}
-                onAuthorized={onAuthorized}
-                authorized={accountAuthorized}
-              />
-            ) : (
-              <p>
-                {t(
-                  installed
-                    ? "Apply this provider, then sign in from the server panel."
-                    : "Install Hermes first. Then authorize this account from the server panel.",
+                field={secretField(
+                  key,
+                  setup.provider === "custom" ? "API key" : "Model provider API key",
+                  provider.authType === "api_key" &&
+                    provider.id !== "lmstudio" &&
+                    !setup.allowUnauthenticatedModel,
                 )}
-              </p>
-            )}
-            {errors["model-auth"] && <FieldError>{t(errors["model-auth"])}</FieldError>}
-          </div>
-        )}
-        {!oauth && provider.keyVars.length > 1 && (
-          <Field>
-            <FieldLabel htmlFor="provider-credential-type">{t("Credential type")}</FieldLabel>
-            <select
-              id="provider-credential-type"
-              className="native-select"
-              value={setup.credentialEnv || provider.keyVars[0]}
-              onChange={(event) => change({ credentialEnv: event.target.value })}
-            >
-              {provider.keyVars.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        )}
-        {key && (
-          <CredentialInput
-            serverId={server.id}
-            field={secretField(
-              key,
-              setup.provider === "custom" ? "API key" : "Model provider API key",
-              provider.authType === "api_key" &&
-                provider.id !== "lmstudio" &&
-                !setup.allowUnauthenticatedModel,
-            )}
-            error={errors[`credential-${key}`]}
-            fieldPlaceholder={installed ? "Leave empty to keep the saved value" : undefined}
-            action={
-              keyUrl ? (
-                <ExternalLink url={keyUrl}>
-                  {t("Get {service} key", { service: name })}
-                </ExternalLink>
-              ) : undefined
-            }
-          />
-        )}
-        {setup.provider === "custom" && (
-          <Field orientation="horizontal">
-            <Checkbox
-              id="model-no-auth"
-              checked={setup.allowUnauthenticatedModel}
-              onCheckedChange={(value) => change({ allowUnauthenticatedModel: !!value })}
-            />
-            <FieldLabel htmlFor="model-no-auth">
-              {t("This endpoint does not require an API key")}
-            </FieldLabel>
-          </Field>
-        )}
-        {(setup.provider === "custom" ||
-          setup.provider === "lmstudio" ||
-          setup.provider === "azure-foundry") && (
-          <>
-            <Field data-invalid={!!errors["model-base-url"]}>
-              <FieldLabel htmlFor="model-base-url">Base URL</FieldLabel>
-              <Input
-                id="model-base-url"
-                aria-required={setup.provider === "custom"}
-                value={setup.baseUrl}
-                onChange={(event) =>
-                  change({
-                    baseUrl: event.target.value,
-                    ...(setup.providerPreset ? { providerPreset: "" } : {}),
-                  })
+                error={errors[`credential-${key}`]}
+                fieldPlaceholder={installed ? "Leave empty to keep the saved value" : undefined}
+                action={
+                  keyUrl ? (
+                    <ExternalLink url={keyUrl}>
+                      {t("Get {service} key", { service: name })}
+                    </ExternalLink>
+                  ) : undefined
                 }
-                placeholder="http://localhost:8000/v1"
-                aria-invalid={!!errors["model-base-url"]}
               />
-              <FieldDescription>
-                {t("Localhost means your VPS. Use the address that your VPS can reach.")}
-              </FieldDescription>
-              {errors["model-base-url"] && <FieldError>{t(errors["model-base-url"])}</FieldError>}
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="model-api-mode">{t("API protocol")}</FieldLabel>
-              <select
-                id="model-api-mode"
-                className="native-select"
-                value={setup.apiMode}
-                onChange={(event) => change({ apiMode: event.target.value })}
-              >
-                <option value="chat_completions">OpenAI Chat Completions</option>
-                <option value="codex_responses">OpenAI Responses</option>
-                <option value="anthropic_messages">Anthropic Messages</option>
-              </select>
-            </Field>
-          </>
-        )}
-        {provider.id === "bedrock" && (
-          <>
-            {["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_REGION"].map(
-              (key) => (
+            )}
+            {setup.provider === "custom" && (
+              <Field orientation="horizontal">
+                <Checkbox
+                  id="model-no-auth"
+                  checked={setup.allowUnauthenticatedModel}
+                  onCheckedChange={(value) => change({ allowUnauthenticatedModel: !!value })}
+                />
+                <FieldLabel htmlFor="model-no-auth">
+                  {t("This endpoint does not require an API key")}
+                </FieldLabel>
+              </Field>
+            )}
+            {(setup.provider === "custom" ||
+              setup.provider === "lmstudio" ||
+              setup.provider === "azure-foundry") && (
+              <>
+                <Field data-invalid={!!errors["model-base-url"]}>
+                  <FieldLabel htmlFor="model-base-url">Base URL</FieldLabel>
+                  <Input
+                    id="model-base-url"
+                    aria-required={setup.provider === "custom"}
+                    value={setup.baseUrl}
+                    onChange={(event) =>
+                      change({
+                        baseUrl: event.target.value,
+                        ...(setup.providerPreset ? { providerPreset: "" } : {}),
+                      })
+                    }
+                    placeholder="http://localhost:8000/v1"
+                    aria-invalid={!!errors["model-base-url"]}
+                  />
+                  <FieldDescription>
+                    {t("Localhost means your VPS. Use the address that your VPS can reach.")}
+                  </FieldDescription>
+                  {errors["model-base-url"] && (
+                    <FieldError>{t(errors["model-base-url"])}</FieldError>
+                  )}
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="model-api-mode">{t("API protocol")}</FieldLabel>
+                  <select
+                    id="model-api-mode"
+                    className="native-select"
+                    value={setup.apiMode}
+                    onChange={(event) => change({ apiMode: event.target.value })}
+                  >
+                    <option value="chat_completions">OpenAI Chat Completions</option>
+                    <option value="codex_responses">OpenAI Responses</option>
+                    <option value="anthropic_messages">Anthropic Messages</option>
+                  </select>
+                </Field>
+              </>
+            )}
+            {provider.id === "bedrock" && (
+              <>
+                {[
+                  "AWS_ACCESS_KEY_ID",
+                  "AWS_SECRET_ACCESS_KEY",
+                  "AWS_SESSION_TOKEN",
+                  "AWS_REGION",
+                ].map((key) => (
+                  <CredentialInput
+                    key={key}
+                    field={{ ...secretField(key, key), secret: key !== "AWS_REGION" }}
+                    serverId={server.id}
+                  />
+                ))}
+                <FieldDescription>
+                  {t("Leave credentials empty to use the server's existing AWS role.")}
+                </FieldDescription>
+              </>
+            )}
+            {provider.id === "vertex" && (
+              <>
                 <CredentialInput
-                  key={key}
-                  field={{ ...secretField(key, key), secret: key !== "AWS_REGION" }}
+                  field={{
+                    ...secretField("GOOGLE_CLOUD_PROJECT", "Google Cloud project"),
+                    secret: false,
+                  }}
                   serverId={server.id}
                 />
-              ),
+                <CredentialInput
+                  field={{
+                    ...secretField("GOOGLE_CLOUD_LOCATION", "Google Cloud location"),
+                    secret: false,
+                  }}
+                  serverId={server.id}
+                />
+                <CredentialFile
+                  serverId={server.id}
+                  name="GOOGLE_SERVICE_ACCOUNT_JSON"
+                  label="Service account JSON"
+                />
+              </>
             )}
-            <FieldDescription>
-              {t("Leave credentials empty to use the server's existing AWS role.")}
-            </FieldDescription>
-          </>
-        )}
-        {provider.id === "vertex" && (
-          <>
-            <CredentialInput
-              field={{
-                ...secretField("GOOGLE_CLOUD_PROJECT", "Google Cloud project"),
-                secret: false,
-              }}
+            {provider.id === "qwen-oauth" && (
+              <>
+                <Badge variant="outline">
+                  {t(
+                    credentials.values.QWEN_AUTH_JSON
+                      ? "Credentials loaded"
+                      : "Import account credentials",
+                  )}
+                </Badge>
+                <CredentialFile
+                  serverId={server.id}
+                  name="QWEN_AUTH_JSON"
+                  label="Qwen account credentials JSON"
+                />
+              </>
+            )}
+            {provider.id === "copilot-acp" && (
+              <CredentialInput
+                serverId={server.id}
+                field={secretField("COPILOT_GITHUB_TOKEN", "GitHub Copilot token")}
+              />
+            )}
+            {provider.id === "moa" && (
+              <MoaSettings
+                serverId={server.id}
+                value={setup.moaConfig}
+                onChange={(value) => change({ moaConfig: value, model: "default" })}
+              />
+            )}
+            <ModelPicker
+              setup={setup}
+              change={change}
               serverId={server.id}
-            />
-            <CredentialInput
-              field={{
-                ...secretField("GOOGLE_CLOUD_LOCATION", "Google Cloud location"),
-                secret: false,
-              }}
-              serverId={server.id}
-            />
-            <CredentialFile
-              serverId={server.id}
-              name="GOOGLE_SERVICE_ACCOUNT_JSON"
-              label="Service account JSON"
-            />
-          </>
-        )}
-        {provider.id === "qwen-oauth" && (
-          <>
-            <Badge variant="outline">
-              {t(
-                credentials.values.QWEN_AUTH_JSON
-                  ? "Credentials loaded"
-                  : "Import account credentials",
-              )}
-            </Badge>
-            <CredentialFile
-              serverId={server.id}
-              name="QWEN_AUTH_JSON"
-              label="Qwen account credentials JSON"
+              installed={installed}
+              accountAuthorized={accountAuthorized}
+              suggestions={models}
+              error={errors["model-name"]}
             />
           </>
         )}
-        {provider.id === "copilot-acp" && (
-          <CredentialInput
-            serverId={server.id}
-            field={secretField("COPILOT_GITHUB_TOKEN", "GitHub Copilot token")}
-          />
-        )}
-        {provider.id === "moa" && (
-          <MoaSettings
-            serverId={server.id}
-            value={setup.moaConfig}
-            onChange={(value) => change({ moaConfig: value, model: "default" })}
-          />
-        )}
-        <ModelPicker
-          setup={setup}
-          change={change}
-          serverId={server.id}
-          installed={installed}
-          accountAuthorized={accountAuthorized}
-          suggestions={models}
-          error={errors["model-name"]}
-        />
       </FieldGroup>
     </section>
   );

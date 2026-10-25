@@ -668,9 +668,13 @@ function ReviewStep({
       <div className="review-selection">
         <span>
           <Bot />
-          {server.setup.provider}
+          {server.setup.deferModelSetup ? t("Not configured") : server.setup.provider}
         </span>
-        <span>{server.setup.model}</span>
+        <span>
+          {server.setup.deferModelSetup
+            ? t("Set up the model after installation")
+            : server.setup.model}
+        </span>
         {server.setup.telegram && (
           <span>
             <MessageCircle />

@@ -64,9 +64,12 @@ def read_settings(fallback, catalog, config_api):
     model = config.get('model', {})
     if isinstance(model, str):
         model = {'default': model}
+    setup['deferModelSetup'] = (model.get('provider') == '' and not model.get('default')) or (not model and fallback.get('deferModelSetup', False))
     provider = model.get('provider', setup['provider'])
     provider = 'openrouter' if provider == 'openai' else provider
-    if provider not in {item['id'] for item in catalog['providers']}:
+    if setup['deferModelSetup']:
+        pass
+    elif provider not in {item['id'] for item in catalog['providers']}:
         warnings.append('The server model provider is outside this catalog. It is preserved unless you edit the model section.')
     else:
         setup['provider'] = provider
@@ -159,7 +162,7 @@ def read_settings(fallback, catalog, config_api):
         ready = key_present or setup['allowUnauthenticatedModel'] or setup['provider'] == 'lmstudio'
     if setup['authMethod'] == 'oauth':
         ready = setup['provider'] in authorized
-    return {'setup': setup, 'configuredCredentials': sorted(configured & allowed), 'modelConfigured': ready and bool(setup['model'].strip()),
+    return {'setup': setup, 'configuredCredentials': sorted(configured & allowed), 'modelConfigured': not setup['deferModelSetup'] and ready and bool(setup['model'].strip()),
             'authorizedProviders': authorized, 'preparedProviders': ['antigravity-oauth'] if antigravity_prepared() else [], 'revision': settings_revision(config, env), 'warnings': sorted(set(warnings))}
 
 
@@ -190,6 +193,7 @@ def write_account_text(target, content):
 def configure(payload, catalog, config_api, plugin_sources=None):
     catalog = combined_catalog(catalog)
     setup = payload['setup']
+    deferred = setup.get('deferModelSetup', False)
     sections = set(payload.get('sections', ['model', 'channels', 'services', 'tools']))
     existing = config_api.load_env()
     config = config_api.read_raw_config()
@@ -202,40 +206,40 @@ def configure(payload, catalog, config_api, plugin_sources=None):
     provider = next(item for item in catalog['providers'] if item['id'] == setup['provider'])
     preset = next((item for item in catalog.get('compatibleProviders', []) if item['id'] == setup.get('providerPreset')), None)
     custom_key = 'HERMES_CUSTOM_' + hashlib.sha256(setup.get('baseUrl', '').encode()).hexdigest()[:16].upper() + '_API_KEY'
-    if supplied.get('COMPANION_CUSTOM_API_KEY'):
+    if not deferred and supplied.get('COMPANION_CUSTOM_API_KEY'):
         supplied[custom_key] = supplied.pop('COMPANION_CUSTOM_API_KEY')
-    if preset and preset['keyVar'] and supplied.get(preset['keyVar']):
+    if not deferred and preset and preset['keyVar'] and supplied.get(preset['keyVar']):
         supplied[custom_key] = supplied[preset['keyVar']]
     legacy = payload['secrets']
-    if legacy.get('apiKey') and provider['keyVars']:
+    if not deferred and legacy.get('apiKey') and provider['keyVars']:
         supplied[provider['keyVars'][0]] = legacy['apiKey']
     for field, name in [('telegramToken', 'TELEGRAM_BOT_TOKEN'), ('telegramAllowedUsers', 'TELEGRAM_ALLOWED_USERS')]:
         if legacy.get(field):
             supplied[name] = legacy[field]
     merged_env = {**existing, **supplied}
     old_model = config.get('model', {})
-    if 'model' in sections and isinstance(old_model, dict) and old_model.get('provider') == provider['id']:
+    if not deferred and 'model' in sections and isinstance(old_model, dict) and old_model.get('provider') == provider['id']:
         old_key = str(old_model.get('api_key') or '')
         old_value = merged_env.get(old_key[2:-1], '') if old_key.startswith('${') and old_key.endswith('}') else old_key
         target = custom_key if provider['id'] == 'custom' and old_model.get('base_url') == setup.get('baseUrl') else (setup.get('credentialEnv') or next(iter(provider['keyVars']), ''))
         if target and old_value and not merged_env.get(target):
             supplied[target] = old_value
             merged_env[target] = old_value
-    if preset and preset['keyVar'] and merged_env.get(preset['keyVar']):
+    if not deferred and preset and preset['keyVar'] and merged_env.get(preset['keyVar']):
         merged_env[custom_key] = merged_env[preset['keyVar']]
         supplied[custom_key] = merged_env[custom_key]
     required_keys = []
-    xai_voice_account = setup['provider'] == 'xai-oauth'
+    xai_voice_account = not deferred and setup['provider'] == 'xai-oauth'
     if not xai_voice_account and ('xai' in {setup.get('ttsProvider'), setup.get('sttProvider')}) and not merged_env.get('XAI_API_KEY'):
         try:
             from hermes_cli.auth import get_xai_oauth_auth_status
             xai_voice_account = bool(get_xai_oauth_auth_status().get('logged_in'))
         except Exception:
             pass
-    oauth = setup.get('authMethod') == 'oauth'
+    oauth = not deferred and setup.get('authMethod') == 'oauth'
     if 'model' in sections and oauth and provider['id'] != 'qwen-oauth' and payload.get('sections') and not provider_oauth_ready(provider['id']):
         raise ValueError('Authorize the selected provider before applying these model settings.')
-    if 'model' in sections and provider['authType'] == 'api_key' and not oauth:
+    if not deferred and 'model' in sections and provider['authType'] == 'api_key' and not oauth:
         if provider['id'] == 'custom':
             if not setup.get('allowUnauthenticatedModel'):
                 required_keys.append(([custom_key], 'model API key'))
@@ -303,18 +307,24 @@ def configure(payload, catalog, config_api, plugin_sources=None):
         model = config.setdefault('model', {})
         for name in ['base_url', 'api_mode', 'api_key', 'key_env', 'api_key_env']:
             model.pop(name, None)
-        model.update(provider=provider['id'], default=setup['model'])
-        if not oauth and setup.get('credentialEnv') in provider['keyVars']:
+        if deferred:
+            # Native canonicalization must not restore a skipped provider from legacy aliases.
+            for name in ['model', 'name', 'api_base', 'api']:
+                model.pop(name, None)
+            for name in ['provider', 'base_url', 'api_base']:
+                config.pop(name, None)
+        model.update(provider='' if deferred else provider['id'], default='' if deferred else setup['model'])
+        if not deferred and not oauth and setup.get('credentialEnv') in provider['keyVars']:
             model['key_env'] = setup['credentialEnv']
-        if not oauth and provider['id'] in {'anthropic', 'openrouter'}:
+        if not deferred and not oauth and provider['id'] in {'anthropic', 'openrouter'}:
             key_name = setup.get('credentialEnv') or next(iter(provider['keyVars']), '')
             if key_name and merged_env.get(key_name):
                 model['api_key'] = '${' + key_name + '}'
-        if setup.get('baseUrl'):
+        if not deferred and setup.get('baseUrl'):
             model['base_url'] = setup['baseUrl']
-        if provider['id'] in {'custom', 'lmstudio', 'azure-foundry'}:
+        if not deferred and provider['id'] in {'custom', 'lmstudio', 'azure-foundry'}:
             model['api_mode'] = setup['apiMode']
-        if provider['id'] == 'custom' and merged_env.get(custom_key):
+        if not deferred and provider['id'] == 'custom' and merged_env.get(custom_key):
             model['api_key'] = '${' + custom_key + '}'
     config.setdefault('gateway', {})['allow_all_users'] = False
     if not payload.get('sections'):
@@ -371,7 +381,7 @@ def configure(payload, catalog, config_api, plugin_sources=None):
             write_account_text(directory / 'plugin.yaml', manifest)
             if name not in enabled:
                 enabled.append(name)
-    if 'model' in sections and provider['id'] == 'moa' and setup.get('moaConfig'):
+    if not deferred and 'model' in sections and provider['id'] == 'moa' and setup.get('moaConfig'):
         from hermes_cli.moa_config import normalize_moa_config, validate_moa_payload
         moa = json.loads(setup['moaConfig'])
         if validate_moa_payload(moa):
@@ -389,7 +399,7 @@ def configure(payload, catalog, config_api, plugin_sources=None):
         ready = bool(merged_env.get('GOOGLE_APPLICATION_CREDENTIALS') or supplied.get('GOOGLE_APPLICATION_CREDENTIALS'))
     if provider['id'] == 'copilot-acp':
         ready = bool(merged_env.get('COPILOT_GITHUB_TOKEN'))
-    return {'modelConfigured': ready and bool(setup['model'].strip())}
+    return {'modelConfigured': not deferred and ready and bool(setup['model'].strip())}
 
 
 if __name__ == '__main__':

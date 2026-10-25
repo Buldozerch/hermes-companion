@@ -30,7 +30,7 @@ Installation steps:
 4. Merge selected model, channel, tool and voice settings through the installed Hermes configuration library and write private credentials.
 5. Enable the system gateway service, check its live process and probe its authenticated loopback API.
 
-New installations require the selected model/API-service credentials. Account providers defer OAuth until Hermes is installed; custom endpoints support an explicit no-auth option. Service/API health and model credential configuration are shown separately. No successful model response is claimed without an actual inference test.
+New profiles start with model setup deferred: no provider or model is presented as connected, and installation needs no model API key. Deferred configuration clears the upstream model/provider defaults; a later model update connects the selected provider. Explicitly selected API providers and external services still require their credentials. Account providers defer OAuth until Hermes is installed; custom endpoints support an explicit no-auth option. Service/API health and model credential configuration are shown separately. No successful model response is claimed without an actual inference test.
 
 ## Durable remote jobs
 

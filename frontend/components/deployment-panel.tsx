@@ -258,11 +258,15 @@ export function DeploymentPanel({
           <dl className="deployment-facts">
             <div>
               <dt>{t("Model provider")}</dt>
-              <dd>{selectedProvider(server.setup.provider).name}</dd>
+              <dd>
+                {server.setup.deferModelSetup
+                  ? t("Not configured")
+                  : selectedProvider(server.setup.provider).name}
+              </dd>
             </div>
             <div>
               <dt>{t("Model name")}</dt>
-              <dd>{server.setup.model}</dd>
+              <dd>{server.setup.deferModelSetup ? t("Not configured") : server.setup.model}</dd>
             </div>
             <div>
               <dt>{t("Channels")}</dt>
