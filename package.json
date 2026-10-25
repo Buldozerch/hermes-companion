@@ -1,0 +1,53 @@
+{
+  "name": "hermes-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 1421",
+    "tauri": "tauri",
+    "desktop": "tauri dev",
+    "test": "vitest run",
+    "format": "prettier --write frontend scripts .github \"src-tauri/tauri*.json\" README.md README.ru.md docs/development.md docs/releases.md docs/release-notes.md vite.config.ts tsconfig.json components.json package.json",
+    "format:check": "prettier --check frontend scripts .github \"src-tauri/tauri*.json\" README.md README.ru.md docs/development.md docs/releases.md docs/release-notes.md vite.config.ts tsconfig.json components.json package.json",
+    "check:release": "node scripts/check-release.mjs",
+    "release": "node scripts/build-release.mjs",
+    "release:collect": "node scripts/collect-release.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/cli": "^2.12.4",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "axe-core": "^4.14.0",
+    "prettier": "^3.9.10",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@hookform/resolvers": "^5.2.2",
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-opener": "^2.7.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "lucide-react": "^1.61.0",
+    "radix-ui": "^1.8.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-hook-form": "^7.90.0",
+    "tailwind-merge": "^3.7.0",
+    "zod": "^4.6.7"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

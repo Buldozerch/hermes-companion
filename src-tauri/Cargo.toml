@@ -1,0 +1,19 @@
+[package]
+name = "hermes-desktop"
+version = "0.1.0"
+edition = "2024"
+description = "A guided desktop companion for self-hosted Hermes Agent"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+hermes-core = { path = ".." }
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["sync"] }
+zeroize = "1"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]

@@ -1,0 +1,6 @@
+node_modules
+target
+dist
+package-lock.json
+graphify-out
+src-tauri/gen

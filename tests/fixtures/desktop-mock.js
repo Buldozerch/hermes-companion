@@ -1,0 +1,81 @@
+// Deterministic IPC fixture. Real installation behavior is tested separately on the VPS.
+(() => {
+  const report = { hostname: "qa-vps", osName: "Ubuntu 24.04 LTS", osId: "ubuntu", osVersion: "24.04", architecture: "x86_64", memoryMb: 1024, diskAvailableMb: 6000, cpuCount: 1, hasSystemd: true, canAdmin: true, hermesVersion: null, checkedAt: Math.floor(Date.now() / 1000) };
+  const server = { id: "qa-server", name: "QA VPS", host: "203.0.113.10", port: 22, username: "root", report, setup: { provider: "openrouter", model: "provider/qa-model", telegram: false, browser: false, updateSystem: true } };
+  const state = {
+    connected: false, workspace: { servers: [server], activity: [] }, installCalls: 0, applyCalls: 0, authStatus: "pending", lastSecrets: null,
+    remoteSetup: null, configuredCredentials: ["OPENROUTER_API_KEY"], revision: "revision-1", settingsReads: 0,
+    authorizedProviders: [], preparedProviders: [], authActions: [], openedUrls: [], modelQueries: [], modelCatalog: {models:[],source:"provider",status:"empty",message:"",truncated:false}, modelDelay: 0,
+    job: { jobId: null, state: "none", step: "", version: null, installedVersion: null, managed: false, serviceActive: false, serviceInstalled: false, apiHealthy: false, modelConfigured: false, rebootRequired: false, events: [] },
+  };
+  window.__QA__ = state;
+  window.isTauri = true;
+  window.__TAURI_INTERNALS__ = {
+    invoke: async (command, args = {}) => {
+      switch (command) {
+        case "load_workspace": return structuredClone(state.workspace);
+        case "connected_servers": return state.connected ? [server.id] : [];
+        case "probe_host": return { fingerprint: "SHA256:qa-fixture", algorithm: "ssh-ed25519", status: "trusted", previousFingerprint: "SHA256:qa-fixture" };
+        case "connect_server": state.connected = true; return structuredClone(report);
+        case "disconnect_server": state.connected = false; return;
+        case "save_setup": Object.assign(server.setup, args.setup); return;
+        case "get_plan": return { ready: true, blockers: [], warnings: ["Less than 8 GB of disk space is available. Installation may run out of space."], steps: [{ id: "install", title: "Install Hermes Agent", description: "Use the official installer and stable release channel." }] };
+        case "get_deployment": return structuredClone(state.job);
+        case "read_server_settings":
+          state.settingsReads++;
+          return {setup:structuredClone(state.remoteSetup ?? server.setup), configuredCredentials:structuredClone(state.configuredCredentials), modelConfigured:state.job.modelConfigured, authorizedProviders:structuredClone(state.authorizedProviders), preparedProviders:structuredClone(state.preparedProviders), revision:state.revision, warnings:[]};
+        case "discover_provider_models": {
+          state.modelQueries.push(structuredClone(args));
+          const result = structuredClone(state.modelCatalog);
+          if (state.modelDelay) await new Promise(resolve => setTimeout(resolve,state.modelDelay));
+          return result;
+        }
+        case "prepare_provider":
+          Object.assign(state.job,{jobId:"00000000-0000-4000-8000-000000000099",operation:"provider",state:"running",step:"configure"});
+          return structuredClone(state.job);
+        case "apply_server_settings":
+          if (args.update.revision !== state.revision) throw {code:"settingsConflict",message:"The server settings changed. Reload them before applying your changes."};
+          state.applyCalls++;
+          state.lastSecrets=args.secrets;
+          state.lastUpdate=args.update;
+          state.remoteSetup=structuredClone(args.update.setup);
+          state.configuredCredentials=[...new Set([...state.configuredCredentials, ...args.secrets.values.map(item=>item.name)])];
+          state.revision+="-next";
+          Object.assign(state.job,{jobId:"00000000-0000-4000-8000-"+String(state.applyCalls).padStart(12,"0"),operation:"configure",state:"running",step:"configure"});
+          return structuredClone(state.job);
+        case "start_deployment":
+          state.installCalls++;
+          state.lastSecrets = args.secrets;
+          Object.assign(state.job, { jobId: "00000000-0000-4000-8000-000000000001", state: "running", step: "install", version: "v9.8.7", managed: true, events: ["Resolving the latest stable Hermes release.", "Installing Hermes v9.8.7."] });
+          return structuredClone(state.job);
+        case "apply_setup":
+          state.applyCalls++;
+          state.lastSecrets=args.secrets;
+          Object.assign(state.job,{operation:"configure",state:"running",step:"configure"});
+          return structuredClone(state.job);
+        case "provider_auth":
+          state.authActions.push(structuredClone(args));
+          if(args.action==="start") {
+            state.authStatus="pending";
+            if(args.provider==="antigravity-oauth") return {session_id:"1234567890abcdef1234567890abcdef",flow:"paste_code",verification_url:"https://accounts.google.com/o/oauth2/auth?state=qa-state&redirect_uri=https%3A%2F%2Fexample.google%2Fcallback",poll_interval:2,expires_in:60};
+            return ["anthropic","openrouter"].includes(args.provider)
+              ? {session_id:"1234567890abcdef1234567890abcdef",flow:"paste_code",verification_url:args.provider==="anthropic"?"https://claude.ai/oauth/authorize?state=qa-state-1234567890&code_challenge=qa-challenge":"https://openrouter.ai/auth?code_challenge=qa-challenge",poll_interval:2,expires_in:900}
+              : {session_id:"qa-session-123456",flow:"device_code",user_code:"QA-1234",verification_url:"https://auth.openai.com/device",poll_interval:3};
+          }
+          if(args.action==="submit") { state.authStatus="approved"; return {status:"exchanging"}; }
+          if(args.action==="poll") {
+            if(state.authStatus==="approved") state.authorizedProviders=[...new Set([...state.authorizedProviders,args.provider])];
+            return {status:state.authStatus};
+          }
+          return {};
+        case "plugin:opener|open_url": state.openedUrls.push(args.url); return;
+        case "manage_service":
+          if (args.action === "stop") { state.job.serviceActive = false; state.job.apiHealthy = false; }
+          else { state.job.serviceActive = true; state.job.apiHealthy = true; }
+          return structuredClone(state.job);
+        case "get_remote_logs": return "Hermes service started.\nAPI_SERVER_KEY=[REDACTED]\n";
+        default: throw { code: "fixture", message: "Unexpected IPC command in test fixture: " + command };
+      }
+    },
+  };
+})();

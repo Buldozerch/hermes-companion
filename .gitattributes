@@ -1,0 +1,7 @@
+# Remote Linux scripts are embedded by Rust; preserve LF on Windows checkouts.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary

@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+
+  build:
+    needs: checks
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - platform: windows-x86_64
+            runner: windows-2022
+            target: x86_64-pc-windows-msvc
+          - platform: macos-aarch64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+          - platform: macos-x86_64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+        with:
+          shared-key: release-${{ matrix.platform }}
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential curl file libssl-dev pkg-config libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - run: npm ci
+      - name: Test the native Rust core
+        run: cargo test -p hermes-core --locked --target ${{ matrix.target }}
+      - name: Build installers
+        id: tauri
+        uses: tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1
+        with:
+          args: --target ${{ matrix.target }} --ci -- --locked
+      - name: Collect installers and checksums
+        run: node scripts/collect-release.mjs ${{ matrix.platform }}
+        env:
+          TAURI_ARTIFACTS: ${{ steps.tauri.outputs.artifactPaths }}
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: Hermes-Companion-${{ matrix.platform }}
+          path: releases/${{ matrix.platform }}/*
+          if-no-files-found: error
+          retention-days: 30
+
+  draft-release:
+    name: Assemble draft prerelease
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: Hermes-Companion-*
+          path: releases
+          merge-multiple: true
+      - name: Attach installers to a draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > /tmp/hermes-release-state; then
+            if [ "$(cat /tmp/hermes-release-state)" != true ]; then
+              echo 'Refusing to replace files in a published release.' >&2
+              exit 1
+            fi
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --draft --prerelease --title "Hermes Companion $RELEASE_TAG" --notes-file docs/release-notes.md
+          fi
+          gh release upload "$RELEASE_TAG" releases/* --clobber
