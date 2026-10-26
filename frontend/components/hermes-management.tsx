@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, RefreshCw, Save } from "lucide-react";
+import { ArrowRight, Check, FileText, RefreshCw, Save } from "lucide-react";
 import { useLocale } from "./locale-provider";
 import { SavedCredentialsProvider, useSetupCredentials } from "./setup-credentials";
 import { SetupModel } from "./setup-model";
 import { SetupChannel } from "./setup-channel";
 import { SetupServices } from "./setup-services";
 import { ManagedTools } from "./managed-tools";
-import { DeploymentPanel } from "./deployment-panel";
+import { ServerOperationDrawer } from "./server-operation-drawer";
 import { HermesUpdater } from "./hermes-updater";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 import { Busy, Notice } from "./shared";
 import { api } from "@/lib/api";
 import { normalizeSetup, selectedProvider, usesBrowserAuth } from "@/lib/setup-catalog";
@@ -23,6 +22,7 @@ import {
   settingsSections,
   validateManagedSettings,
 } from "@/lib/managed-settings";
+import { advanceOnboarding, initialOnboarding } from "@/lib/onboarding";
 import { errorMessage } from "@/lib/validation";
 import type {
   DeploymentStatus,
@@ -30,6 +30,8 @@ import type {
   SettingsSection,
   SettingsSnapshot,
   SetupOptions,
+  OnboardingProgress,
+  SettingsNavigation,
 } from "@/lib/types";
 
 export function HermesManagement({
@@ -39,7 +41,9 @@ export function HermesManagement({
   onConnect,
   onSetup,
   onStatus,
-  onReboot,
+  section,
+  onSectionChange,
+  onNavigation,
 }: {
   server: Server;
   connected: boolean;
@@ -47,13 +51,17 @@ export function HermesManagement({
   onConnect: () => void;
   onSetup: () => void;
   onStatus: (status: DeploymentStatus) => void;
-  onReboot: () => void;
+  section: SettingsSection;
+  onSectionChange: (section: SettingsSection) => void;
+  onNavigation: (state: SettingsNavigation | null) => void;
 }) {
   const { t } = useLocale();
   const credentials = useSetupCredentials(server.id);
   const [snapshot, setSnapshot] = useState<SettingsSnapshot | null>(null);
   const [setup, setSetup] = useState<SetupOptions>(() => normalizeSetup(server.setup));
-  const [section, setSection] = useState<SettingsSection>("model");
+  const [progress, setProgress] = useState<OnboardingProgress | null>(null);
+  const loadedWalkthrough = useRef(false);
+  const [finishedNow, setFinishedNow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -64,11 +72,19 @@ export function HermesManagement({
   const [resetKey, setResetKey] = useState(0);
   const [showStatus, setShowStatus] = useState(false);
   const request = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const wasRunning = useRef(false);
   const installed = hermesInstalled(status);
   const running = status?.state === "starting" || status?.state === "running";
   useEffect(() => {
     if (running) setShowStatus(true);
+    else if (wasRunning.current && status?.state === "succeeded" && !pending) setShowStatus(false);
   }, [running]);
   const changes = snapshot
     ? settingsChanges(setup, snapshot.setup, credentials.values)
@@ -79,6 +95,59 @@ export function HermesManagement({
   }
   const available = snapshot ? availableCredentials(setup, snapshot) : new Set<string>();
   const blocked = busy || running || !!pending || !connected;
+  const confirmedSaved = saved && !changes.count && !!status?.apiHealthy && status.serviceActive;
+  useEffect(() => {
+    if (changes.count) setSaved(false);
+  }, [changes.count]);
+  const guided = !!progress && !progress.finished;
+  useEffect(() => {
+    if (status?.state === "failed" || status?.state === "interrupted") setShowStatus(true);
+  }, [status?.jobId, status?.state]);
+  useEffect(() => {
+    if (!pending || !status || !snapshot || running || status.jobId === pending) return;
+    setPending(null);
+    setSaved(false);
+    setError(
+      new Error(
+        "A different server operation replaced the pending walkthrough job. Reload settings before continuing.",
+      ),
+    );
+    setShowStatus(true);
+    if (progress?.pending) void persistProgress({ ...progress, pending: null }).catch(setError);
+  }, [pending, status?.jobId, running, !!snapshot]);
+  useEffect(() => {
+    onNavigation({
+      serverId: server.id,
+      dirty: changes.sections,
+      completed: progress?.completed ?? [],
+      skipped: progress?.skipped ?? [],
+      blocked,
+    });
+  }, [
+    server.id,
+    changes.sections.join(","),
+    progress?.completed.join(","),
+    progress?.skipped.join(","),
+    blocked,
+    onNavigation,
+  ]);
+  useEffect(() => () => onNavigation(null), [onNavigation]);
+
+  async function persistProgress(next: OnboardingProgress) {
+    await api.saveOnboarding(server.id, next);
+    setProgress(next);
+  }
+  async function advance(section: SettingsSection, skip = false) {
+    if (!progress) return;
+    const next = advanceOnboarding(progress, section, skip);
+    await persistProgress(next);
+    if (!mounted.current) return;
+    onSectionChange(next.current);
+    setFinishedNow(next.finished);
+    requestAnimationFrame(() =>
+      document.getElementById("settings-section-heading")?.scrollIntoView({ block: "start" }),
+    );
+  }
   useEffect(() => {
     const finished = wasRunning.current && !running;
     wasRunning.current = running;
@@ -91,15 +160,24 @@ export function HermesManagement({
     }
   }, [running]);
 
-  async function reload(keepDraft = false) {
+  async function reload(keepDraft = false, restorePending = true) {
     const current = ++request.current;
     setBusy(true);
     setError(null);
     try {
-      const next = await api.readSettings(server.id);
+      const [next, walkthrough] = await Promise.all([
+        api.readSettings(server.id),
+        api.onboarding(server.id),
+      ]);
       if (current !== request.current) return;
       next.setup = normalizeSetup(next.setup);
       setSnapshot(next);
+      setProgress(walkthrough);
+      if (!loadedWalkthrough.current) {
+        if (walkthrough && !walkthrough.finished) onSectionChange(walkthrough.current);
+        loadedWalkthrough.current = true;
+      }
+      if (restorePending && walkthrough?.pending) setPending(walkthrough.pending.jobId);
       if (!keepDraft) {
         setSetup(next.setup);
         setLinkedProvider(null);
@@ -107,6 +185,7 @@ export function HermesManagement({
         credentials.clear();
       }
       setErrors({});
+      return next;
     } catch (error) {
       if (current === request.current) setError(error);
     } finally {
@@ -120,20 +199,62 @@ export function HermesManagement({
     };
   }, [server.id, connected, installed]);
   useEffect(() => {
-    if (!pending || status?.jobId !== pending || running) return;
+    if (!pending || !snapshot || status?.jobId !== pending || running) return;
+    const job = pending;
     setPending(null);
-    if (status.state === "succeeded") {
-      setSaved(!preparingProvider.current);
-      void reload(preparingProvider.current);
-      preparingProvider.current = false;
-    } else {
+    if (status.state !== "succeeded") {
+      setSaved(false);
+      setShowStatus(true);
       setError(
         new Error(
-          "The settings operation failed. Open service status and logs for details, then reload the server settings before retrying.",
+          "The settings operation failed. Review the operation panel, reload the server settings and retry.",
         ),
       );
+      if (progress?.pending) void persistProgress({ ...progress, pending: null }).catch(setError);
+      return;
     }
-  }, [pending, status?.jobId, status?.state]);
+    const preparation = preparingProvider.current;
+    preparingProvider.current = false;
+    void (async () => {
+      const next = await reload(preparation, false);
+      if (!next) {
+        setShowStatus(true);
+        return;
+      }
+      if (!preparation && (!status.apiHealthy || !status.serviceActive)) {
+        setSaved(false);
+        setShowStatus(true);
+        setError(
+          new Error(
+            "Settings were written, but the Hermes service is not healthy. Review the service logs.",
+          ),
+        );
+        return;
+      }
+      if (
+        progress?.pending?.jobId === job &&
+        progress.pending.section === "model" &&
+        (next.setup.deferModelSetup || !next.modelConfigured)
+      ) {
+        setSaved(false);
+        setShowStatus(true);
+        setError(
+          new Error(
+            "The model connection is not configured. Check its authorization and saved credentials before continuing.",
+          ),
+        );
+        return;
+      }
+      if (!preparation && progress?.pending?.jobId === job) {
+        await advance(progress.pending.section);
+      }
+      setSaved(!preparation);
+      setShowStatus(false);
+    })().catch((error) => {
+      setError(error);
+      setShowStatus(true);
+    });
+  }, [pending, status?.jobId, status?.state, !!snapshot]);
   useEffect(() => {
     if (!changes.count) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -156,7 +277,7 @@ export function HermesManagement({
     setError(null);
     setSaved(false);
   }
-  async function apply(transportOnly = false) {
+  async function apply(transportOnly = false, continueAfter = false) {
     if (!snapshot || blocked || (!changes.count && !transportOnly)) return;
     if (transportOnly && (!snapshot.modelTransportNeedsUpdate || changes.count)) return;
     const sections: SettingsSection[] = transportOnly ? ["model"] : changes.sections;
@@ -173,7 +294,7 @@ export function HermesManagement({
     if (id) {
       const modelErrors = validateSetup(setup, credentials.values, false, "model", available);
       const channelErrors = validateSetup(setup, credentials.values, false, "channels", available);
-      setSection(
+      onSectionChange(
         id === "model-auth" || modelErrors[id]
           ? "model"
           : channelErrors[id]
@@ -206,6 +327,13 @@ export function HermesManagement({
       setPending(result.jobId);
       setShowStatus(true);
       onStatus(result);
+      if (continueAfter && progress && result.jobId) {
+        await persistProgress({
+          ...progress,
+          current: section,
+          pending: { jobId: result.jobId, section },
+        });
+      }
       credentials.clear();
     } catch (error) {
       setError(error);
@@ -214,6 +342,42 @@ export function HermesManagement({
     }
   }
 
+  async function continueSetup(skip = false) {
+    if (!progress || blocked) return;
+    if (!skip && section === "model" && setup.deferModelSetup) {
+      setError(
+        new Error("Connect and apply a model provider before continuing, or choose Skip for now."),
+      );
+      return;
+    }
+    if (changes.count) {
+      if (!skip) await apply(false, true);
+      return;
+    }
+    if (
+      !skip &&
+      section === "model" &&
+      (snapshot?.setup.deferModelSetup || !snapshot?.modelConfigured)
+    ) {
+      setError(
+        new Error("Connect and apply a model provider before continuing, or choose Skip for now."),
+      );
+      return;
+    }
+    if (!skip && (!status?.apiHealthy || !status.serviceActive)) {
+      setError(new Error("Start the Hermes service before continuing the walkthrough."));
+      setShowStatus(true);
+      return;
+    }
+    setBusy(true);
+    try {
+      await advance(section, skip);
+    } catch (error) {
+      setError(error);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function authorized() {
     setBusy(true);
     try {
@@ -291,6 +455,42 @@ export function HermesManagement({
           {t(changes.count && error ? "Discard changes and reload" : "Reload from server")}
         </Button>
       </header>
+      {!guided && (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={blocked || !snapshot || !!changes.count}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await persistProgress(initialOnboarding());
+              if (mounted.current) onSectionChange("model");
+              setFinishedNow(false);
+            } catch (error) {
+              setError(error);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {t("Start guided setup")}
+        </Button>
+      )}
+      {guided && (
+        <p className="walkthrough-intro">
+          {t("First-time settings · Step {step} of {total}", {
+            step: settingsSections.findIndex(({ id }) => id === section) + 1,
+            total: settingsSections.length,
+          })}
+        </p>
+      )}
+      {finishedNow && (
+        <Notice title="Settings walkthrough complete">
+          <p>
+            {t("Your choices were saved. You can edit each section independently from now on.")}
+          </p>
+        </Notice>
+      )}
       <HermesUpdater
         serverId={server.id}
         installedVersion={status.installedVersion}
@@ -357,12 +557,13 @@ export function HermesManagement({
             </Notice>
           )}
           <ToggleGroup
+            disabled={blocked}
             type="single"
             variant="outline"
             className="management-tabs"
             value={section}
             onValueChange={(value) => {
-              if (value) setSection(value as SettingsSection);
+              if (value) onSectionChange(value as SettingsSection);
             }}
             aria-label={t("Hermes settings sections")}
           >
@@ -382,10 +583,19 @@ export function HermesManagement({
               noValidate
               onSubmit={(event) => {
                 event.preventDefault();
-                void apply();
+                if (guided) void continueSetup();
+                else void apply();
               }}
             >
-              <fieldset disabled={blocked} className="management-content">
+              <fieldset
+                id="settings-section-heading"
+                tabIndex={-1}
+                disabled={blocked}
+                className="management-content"
+                aria-label={t(
+                  settingsSections.find(({ id }) => id === section)?.label ?? "Model and provider",
+                )}
+              >
                 {section === "model" && (
                   <SetupModel
                     setup={setup}
@@ -435,18 +645,34 @@ export function HermesManagement({
                   {t("Complete the highlighted fields before continuing.")}
                 </p>
               )}
-              {saved && (
-                <p role="status" className="saved-message">
-                  <Check />
-                  {t("Changes applied. The Hermes service is healthy.")}
-                </p>
-              )}
-              <footer className="management-save-bar">
-                <div>
+              <footer className="management-save-bar" aria-label={t("Settings actions")}>
+                <div
+                  role="status"
+                  className={confirmedSaved ? "settings-feedback success" : "settings-feedback"}
+                >
                   <strong>
-                    {t(changes.count ? "Changed settings: {count}" : "No unsaved changes", {
-                      count: changes.count,
-                    })}
+                    {busy || running || pending ? (
+                      <Busy>
+                        {t(
+                          busy && !running && !pending
+                            ? "Please wait…"
+                            : status?.step === "service"
+                              ? "Checking Hermes service…"
+                              : "Applying settings",
+                        )}
+                      </Busy>
+                    ) : confirmedSaved ? (
+                      <>
+                        <Check aria-hidden="true" />
+                        {t("Changes applied. The Hermes service is healthy.")}
+                      </>
+                    ) : error ? (
+                      t("Settings need attention")
+                    ) : (
+                      t(changes.count ? "Changed settings: {count}" : "No unsaved changes", {
+                        count: changes.count,
+                      })
+                    )}
                   </strong>
                   <p>
                     {t(
@@ -456,6 +682,15 @@ export function HermesManagement({
                 </div>
                 <div className="setup-footer-actions">
                   <Button
+                    id="settings-logs-button"
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowStatus(true)}
+                  >
+                    <FileText data-icon="inline-start" />
+                    {t("Logs")}
+                  </Button>
+                  <Button
                     type="button"
                     variant="ghost"
                     disabled={blocked || !changes.count}
@@ -463,13 +698,35 @@ export function HermesManagement({
                   >
                     {t("Discard changes")}
                   </Button>
-                  <Button type="submit" disabled={blocked || !changes.count}>
+                  {guided && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={blocked || !!changes.count}
+                      onClick={() => void continueSetup(true)}
+                    >
+                      {t("Skip for now")}
+                    </Button>
+                  )}
+                  <Button type="submit" disabled={blocked || (!guided && !changes.count)}>
                     {blocked ? (
                       <Busy>{t("Please wait…")}</Busy>
                     ) : (
                       <>
-                        <Save data-icon="inline-start" />
-                        {t("Apply changes")}
+                        {guided ? (
+                          <ArrowRight data-icon="inline-start" />
+                        ) : (
+                          <Save data-icon="inline-start" />
+                        )}
+                        {t(
+                          guided
+                            ? changes.count
+                              ? "Save and continue"
+                              : section === "tools"
+                                ? "Finish setup"
+                                : "Next section"
+                            : "Apply changes",
+                        )}
                       </>
                     )}
                   </Button>
@@ -479,26 +736,12 @@ export function HermesManagement({
           </SavedCredentialsProvider>
         </>
       )}
-      <Accordion
-        type="single"
-        collapsible
-        value={showStatus ? "status" : ""}
-        onValueChange={(value) => setShowStatus(!!value)}
-      >
-        <AccordionItem value="status">
-          <AccordionTrigger>{t("Service status and logs")}</AccordionTrigger>
-          <AccordionContent>
-            <DeploymentPanel
-              server={{ ...server, setup: snapshot?.setup ?? server.setup }}
-              connected={connected}
-              showProviderSignIn={false}
-              title="Service status"
-              onReboot={onReboot}
-              hasUnsavedChanges={!!changes.count}
-            />
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+      <ServerOperationDrawer
+        server={{ ...server, setup: snapshot?.setup ?? server.setup }}
+        connected={connected}
+        open={showStatus}
+        onOpenChange={setShowStatus}
+      />
     </div>
   );
 }

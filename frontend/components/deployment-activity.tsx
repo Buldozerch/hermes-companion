@@ -14,10 +14,12 @@ export function DeploymentActivity({
   serverId,
   status,
   connected,
+  rawOutput,
 }: {
   serverId: string;
   status: DeploymentStatus;
   connected: boolean;
+  rawOutput?: string;
 }) {
   const { t } = useLocale();
   const [now, setNow] = useState(Date.now);
@@ -32,7 +34,7 @@ export function DeploymentActivity({
     return () => window.clearInterval(timer);
   }, [running]);
   useEffect(() => {
-    if (!connected) return;
+    if (!connected || rawOutput !== undefined) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
@@ -55,7 +57,17 @@ export function DeploymentActivity({
       active = false;
       clearTimeout(timer);
     };
-  }, [connected, serverId, status.jobId, running]);
+  }, [connected, serverId, status.jobId, running, rawOutput]);
+  const visibleOutput =
+    rawOutput === undefined
+      ? output
+      : rawOutput
+          .split("--- Hermes service journal ---")[0]
+          .replace(/\r\n?/g, "\n")
+          .trim()
+          .split("\n")
+          .slice(-12)
+          .join("\n");
   const sinceCheck = Math.max(0, (now - sample.received) / 1000);
   // Use the server clock so a difference between laptop/VPS clocks cannot skew elapsed time.
   const serverNow = (status.checkedAt ?? sample.received / 1000) + sinceCheck;
@@ -99,14 +111,14 @@ export function DeploymentActivity({
           {errorMessage(error)}
         </p>
       )}
-      {output ? (
+      {visibleOutput ? (
         <pre
           className="deployment-log live-output"
           lang="en"
           translate="no"
           aria-label={t("Installer output")}
         >
-          {output}
+          {visibleOutput}
         </pre>
       ) : (
         <p>

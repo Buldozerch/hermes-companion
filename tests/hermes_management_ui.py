@@ -55,6 +55,7 @@ with sync_playwright() as playwright:
     expect(page.get_by_role('button', name='Replace', exact=True)).to_be_visible()
     page.get_by_role('button', name='Replace', exact=True).click()
     page.locator('#credential-OPENROUTER_API_KEY').fill('abandoned-model-key')
+    expect(page.get_by_text('Changes applied. The Hermes service is healthy.', exact=True)).to_have_count(0)
     page.get_by_role('radio', name='Channels', exact=True).click()
     expect(page.locator('#credential-TELEGRAM_BOT_TOKEN')).to_have_count(0)
     expect(page.get_by_text('Configured on server', exact=True)).to_have_count(2)

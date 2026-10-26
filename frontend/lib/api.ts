@@ -20,6 +20,7 @@ import type {
   HermesUpdate,
   CompanionUpdate,
   UpdateProgress,
+  OnboardingProgress,
 } from "./types";
 
 export const desktop = isTauri();
@@ -70,6 +71,10 @@ function desktopRequiredError() {
 }
 
 export const api = {
+  onboarding: (serverId: string): Promise<OnboardingProgress | null> =>
+    invoke("get_settings_onboarding", { serverId }),
+  saveOnboarding: (serverId: string, progress: OnboardingProgress): Promise<void> =>
+    invoke("save_settings_onboarding", { serverId, progress }),
   checkCompanionUpdate: (): Promise<CompanionUpdate> => invoke("check_companion_update"),
   installCompanionUpdate: (onProgress: (progress: UpdateProgress) => void): Promise<void> => {
     const progress = new Channel<UpdateProgress>();

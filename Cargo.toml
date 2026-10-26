@@ -1,6 +1,6 @@
 [package]
 name = "hermes-core"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 description = "SSH connections and deployment planning for Hermes Desktop"
 

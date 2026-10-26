@@ -36,6 +36,10 @@ impl Database {
              CREATE TABLE IF NOT EXISTS deployment_jobs (
                server_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, state TEXT NOT NULL,
                FOREIGN KEY(server_id) REFERENCES servers(id) ON DELETE CASCADE
+             );
+             CREATE TABLE IF NOT EXISTS settings_onboarding (
+               server_id TEXT PRIMARY KEY, progress TEXT NOT NULL,
+               FOREIGN KEY(server_id) REFERENCES servers(id) ON DELETE CASCADE
              );",
         )?;
         Ok(Self {
@@ -94,6 +98,35 @@ impl Database {
             .into_iter()
             .find(|server| server.id == id)
             .ok_or_else(|| AppError::new("notFound", "Server not found. Refresh the server list."))
+    }
+
+    pub fn onboarding(&self, id: &str) -> Result<Option<crate::onboarding::OnboardingProgress>> {
+        self.server(id)?;
+        let value: Option<String> = self
+            .lock()?
+            .query_row(
+                "SELECT progress FROM settings_onboarding WHERE server_id=?1",
+                [id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        value
+            .map(|json| serde_json::from_str(&json).map_err(AppError::from))
+            .transpose()
+    }
+
+    pub fn save_onboarding(
+        &self,
+        id: &str,
+        progress: &crate::onboarding::OnboardingProgress,
+    ) -> Result<()> {
+        self.server(id)?;
+        progress.validate()?;
+        self.lock()?.execute(
+            "INSERT INTO settings_onboarding(server_id,progress) VALUES (?1,?2) ON CONFLICT(server_id) DO UPDATE SET progress=excluded.progress",
+            params![id, serde_json::to_string(progress)?],
+        )?;
+        Ok(())
     }
 
     pub fn add_server(&self, connection: ServerDraft) -> Result<Server> {
@@ -320,6 +353,60 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{managed_settings::SettingsSection, onboarding::OnboardingProgress};
+
+    #[test]
+    fn walkthrough_progress_survives_reopening_and_is_scoped_to_each_server() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("workspace.sqlite3");
+        let database = Database::open(&path)?;
+        let draft = ServerDraft {
+            name: "Test".into(),
+            host: "example.com".into(),
+            port: 22,
+            username: "root".into(),
+        };
+        let first = database.add_server(draft.clone())?;
+        let second = database.add_server(draft)?;
+        let progress = OnboardingProgress {
+            current: SettingsSection::Channels,
+            completed: vec![SettingsSection::Model],
+            ..Default::default()
+        };
+        database.save_onboarding(&first.id, &progress)?;
+        drop(database);
+        let database = Database::open(&path)?;
+        let restored = database
+            .onboarding(&first.id)?
+            .ok_or_else(|| AppError::new("test", "Missing saved walkthrough."))?;
+        assert!(
+            restored.current == SettingsSection::Channels
+                && restored.completed == vec![SettingsSection::Model]
+        );
+        assert!(database.onboarding(&second.id)?.is_none());
+        database.remove_server(&first.id)?;
+        assert!(database.onboarding(&first.id).is_err());
+        assert!(database.onboarding(&second.id)?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn walkthrough_rejects_duplicate_sections_and_private_extra_fields() -> Result<()> {
+        let duplicate = OnboardingProgress {
+            completed: vec![SettingsSection::Model],
+            skipped: vec![SettingsSection::Model],
+            ..Default::default()
+        };
+        assert!(duplicate.validate().is_err());
+        let private = r#"{"current":"model","completed":[],"skipped":[],"finished":false,"pending":null,"apiKey":"test-private-value"}"#;
+        assert!(serde_json::from_str::<OnboardingProgress>(private).is_err());
+        let incomplete = OnboardingProgress {
+            finished: true,
+            ..Default::default()
+        };
+        assert!(incomplete.validate().is_err());
+        Ok(())
+    }
 
     #[test]
     fn polling_a_finished_job_does_not_duplicate_activity() -> Result<()> {

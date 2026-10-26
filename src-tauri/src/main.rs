@@ -7,6 +7,7 @@ use hermes_core::{
     ServerReport, SetupOptions,
     deployment::{self, DeploymentSecrets, DeploymentStatus},
     managed_settings::{self, SettingsSnapshot, SettingsUpdate},
+    onboarding::OnboardingProgress,
     plan::{DeploymentPlan, deployment_plan},
     ssh::{SshSession, probe},
 };
@@ -37,6 +38,23 @@ fn load_workspace(state: State<'_, AppState>) -> Result<Workspace> {
 #[tauri::command]
 fn add_server(draft: ServerDraft, state: State<'_, AppState>) -> Result<Server> {
     state.database.add_server(draft)
+}
+
+#[tauri::command]
+fn get_settings_onboarding(
+    server_id: String,
+    state: State<'_, AppState>,
+) -> Result<Option<OnboardingProgress>> {
+    state.database.onboarding(&server_id)
+}
+
+#[tauri::command]
+fn save_settings_onboarding(
+    server_id: String,
+    progress: OnboardingProgress,
+    state: State<'_, AppState>,
+) -> Result<()> {
+    state.database.save_onboarding(&server_id, &progress)
 }
 
 #[tauri::command]
@@ -174,6 +192,11 @@ async fn start_deployment(
         Err(error) => state.database.record(Some(&server_id), "Installation could not start", &error.message, "error")?,
     }
     if let Ok(status) = &result {
+        if state.database.onboarding(&server_id)?.is_none() {
+            state
+                .database
+                .save_onboarding(&server_id, &OnboardingProgress::default())?;
+        }
         state.database.save_setup(
             &server_id,
             &SetupOptions::clean_install(server.setup.update_system),
@@ -375,6 +398,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             load_workspace,
+            get_settings_onboarding,
+            save_settings_onboarding,
             add_server,
             remove_server,
             probe_host,

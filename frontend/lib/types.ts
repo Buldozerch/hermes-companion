@@ -115,6 +115,20 @@ export interface DeploymentStatus {
 }
 export type Page = "overview" | "servers" | "settings" | "activity" | "setup";
 export type SettingsSection = "model" | "channels" | "services" | "tools";
+export interface OnboardingProgress {
+  current: SettingsSection;
+  completed: SettingsSection[];
+  skipped: SettingsSection[];
+  finished: boolean;
+  pending: { jobId: string; section: SettingsSection } | null;
+}
+export interface SettingsNavigation {
+  serverId: string;
+  dirty: SettingsSection[];
+  completed: SettingsSection[];
+  skipped: SettingsSection[];
+  blocked: boolean;
+}
 export interface SettingsSnapshot {
   setup: SetupOptions;
   configuredCredentials: string[];

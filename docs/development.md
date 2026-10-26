@@ -63,6 +63,7 @@ python -m venv .venv
 .venv/bin/python tests/updates_ui.py
 .venv/bin/python tests/reboot_ui.py
 .venv/bin/python tests/transport_ui.py
+.venv/bin/python tests/management_walkthrough_ui.py
 ```
 
 On Windows use `.venv\Scripts\python` instead of `.venv/bin/python`. The GUI scripts support `--chromium /path/to/chrome` for an existing browser. Screenshots use synthetic server data. Native WebView differences still need the [manual desktop checks](releases.md#manual-checks).
@@ -108,6 +109,8 @@ cargo run --example remote_vps -- lifecycle
 English is the default UI language. Source strings are translation keys; Russian translations live in `frontend/locales/ru.json`. Add a translation for each new user-facing message. Technical activity and errors remain English in both locales; user-entered names and model IDs are never translated. The EN/RU selection is stored as `hermes-companion.locale` in WebView localStorage.
 
 Tauri chooses the platform app-data directory for identifier `app.hermes.companion`. SQLite contains server addresses, SSH usernames, trusted host fingerprints and non-secret settings. Fingerprints survive profile deletion. SSH passwords/private keys are not persisted; Rust connection credentials are zeroized when dropped. OS credential storage is not implemented.
+
+The `settings_onboarding` table stores per-server walkthrough checkpoints, explicit skips and the ID of a pending apply job. It contains no credentials or configuration drafts. New installations enter the walkthrough; existing profiles keep independent settings unless the user starts the walkthrough explicitly. A pending step advances only after its matching job succeeds, the service is healthy and the server settings have been reloaded.
 
 Provider keys remain on the VPS. OAuth uses native account stores; the Google CLI owns Antigravity credentials. External links open in the system browser. The WebView has no general shell or filesystem permission.
 

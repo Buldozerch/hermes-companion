@@ -30,6 +30,8 @@
           state.hermesUpdateCalls=(state.hermesUpdateCalls??0)+1;
           Object.assign(state.job,{jobId:"00000000-0000-4000-8000-000000000088",operation:"update",state:"running",step:"backup"});
           return structuredClone(state.job);
+        case "get_settings_onboarding": return structuredClone(state.onboarding ?? null);
+        case "save_settings_onboarding": state.onboarding=structuredClone(args.progress); return;
         case "load_workspace": return structuredClone(state.workspace);
         case "connected_servers": return state.connected ? [server.id] : [];
         case "probe_host": return { fingerprint: "SHA256:qa-fixture", algorithm: "ssh-ed25519", status: "trusted", previousFingerprint: "SHA256:qa-fixture" };
@@ -68,12 +70,14 @@
           state.lastUpdate=args.update;
           state.remoteSetup=structuredClone(args.update.setup);
           if(args.update.sections.includes('model')) state.modelTransportNeedsUpdate=false;
+          if(args.update.sections.includes('model')) state.job.modelConfigured=!!args.update.setup.model && !args.update.setup.deferModelSetup;
           state.configuredCredentials=[...new Set([...state.configuredCredentials, ...args.secrets.values.map(item=>item.name)])];
           state.revision+="-next";
           Object.assign(state.job,{jobId:"00000000-0000-4000-8000-"+String(state.applyCalls).padStart(12,"0"),operation:"configure",state:"running",step:"configure"});
           return structuredClone(state.job);
         case "start_deployment":
           state.installCalls++;
+          state.onboarding ??= {current:'model',completed:[],skipped:[],finished:false,pending:null};
           state.lastSecrets = args.secrets;
           Object.assign(server.setup,{deferModelSetup:true,model:"",channels:[],telegram:false,tools:["file","memory","web","tts"]});
           Object.assign(state.job, { jobId: "00000000-0000-4000-8000-000000000001", state: "running", step: "install", version: "v9.8.7", managed: true, events: ["Resolving the latest stable Hermes release.", "Installing Hermes v9.8.7."] });

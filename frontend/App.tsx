@@ -47,6 +47,9 @@ import { Overview, ServerGuide, ServerTile } from "@/components/overview";
 import { ModelSettings, SetupWizard } from "@/components/setup-wizard";
 import { HermesManagement } from "@/components/hermes-management";
 import { AppUpdater } from "@/components/app-updater";
+import { ServerRebootNotice } from "@/components/server-reboot-notice";
+import { settingsSections } from "@/lib/managed-settings";
+import type { SettingsSection, SettingsNavigation } from "@/lib/types";
 import { hermesInstalled } from "@/lib/managed-settings";
 import type { DeploymentStatus } from "@/lib/types";
 import { BrandMark, Busy, ExternalLink, Notice, PageTitle } from "@/components/shared";
@@ -67,6 +70,17 @@ export default function App() {
   const [rebootingIds, setRebootingIds] = useState<string[]>([]);
   const rebooting = useRef(new Set<string>());
   const [deployments, setDeployments] = useState<Record<string, DeploymentStatus>>({});
+  const deploymentRevisions = useRef<Record<string, number>>({});
+  const updateDeployment = useCallback((serverId: string, status: DeploymentStatus) => {
+    deploymentRevisions.current[serverId] = (deploymentRevisions.current[serverId] ?? 0) + 1;
+    setDeployments((previous) => ({ ...previous, [serverId]: status }));
+  }, []);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("model");
+  const [settingsNavigation, setSettingsNavigation] = useState<SettingsNavigation | null>(null);
+  const updateSettingsNavigation = useCallback(
+    (value: SettingsNavigation | null) => setSettingsNavigation(value),
+    [],
+  );
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -111,13 +125,16 @@ export default function App() {
           if (active) {
             const connected = ids.filter((id) => !rebooting.current.has(id));
             setConnectedIds(connected);
-            for (const id of connected)
+            for (const id of connected) {
+              const revision = deploymentRevisions.current[id];
               void api
                 .deployment(id)
                 .then((status) => {
-                  if (active) setDeployments((previous) => ({ ...previous, [id]: status }));
+                  if (active && deploymentRevisions.current[id] === revision)
+                    setDeployments((previous) => ({ ...previous, [id]: status }));
                 })
                 .catch(() => {});
+            }
           }
         })
         .catch(() => {
@@ -143,6 +160,7 @@ export default function App() {
     navigate("setup");
   }
   function select(server: Server) {
+    setSettingsSection("model");
     setSelectedId(server.id);
     const status = deployments[server.id];
     if (connectedIds.includes(server.id) && hermesInstalled(status)) {
@@ -191,7 +209,7 @@ export default function App() {
     await refresh();
     if (selectedId && desktop) {
       const status = await api.deployment(selectedId);
-      setDeployments((previous) => ({ ...previous, [selectedId]: status }));
+      updateDeployment(selectedId, status);
       if (hermesInstalled(status)) navigate("settings");
       else if (status.state === "running" || status.state === "starting") setStep(3);
     }
@@ -239,37 +257,67 @@ export default function App() {
         </div>
         <nav>
           {navigation.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              disabled={id === "settings" && !settingsAvailable}
-              title={
-                id === "settings" && !settingsAvailable
-                  ? t("Install Hermes on a connected server to unlock settings.")
-                  : undefined
-              }
-              onClick={() => {
-                if (
-                  id === "settings" &&
-                  desktop &&
-                  !settingsServers.some((server) => server.id === selectedId)
-                ) {
-                  setSelectedId(settingsServers[0]?.id ?? null);
+            <div key={id}>
+              <button
+                disabled={id === "settings" && !settingsAvailable}
+                title={
+                  id === "settings" && !settingsAvailable
+                    ? t("Install Hermes on a connected server to unlock settings.")
+                    : undefined
                 }
-                navigate(id);
-              }}
-              className={
-                page === id || (page === "setup" && id === "servers")
-                  ? "nav-item active"
-                  : "nav-item"
-              }
-              aria-current={page === id ? "page" : undefined}
-            >
-              <Icon />
-              <span>{t(label)}</span>
-              {id === "servers" && workspace.servers.length > 0 && (
-                <span className="nav-count">{workspace.servers.length}</span>
+                onClick={() => {
+                  if (
+                    id === "settings" &&
+                    desktop &&
+                    !settingsServers.some((server) => server.id === selectedId)
+                  ) {
+                    setSelectedId(settingsServers[0]?.id ?? null);
+                  }
+                  navigate(id);
+                }}
+                className={
+                  page === id || (page === "setup" && id === "servers")
+                    ? "nav-item active"
+                    : "nav-item"
+                }
+                aria-current={page === id ? "page" : undefined}
+              >
+                <Icon />
+                <span>{t(label)}</span>
+                {id === "servers" && workspace.servers.length > 0 && (
+                  <span className="nav-count">{workspace.servers.length}</span>
+                )}
+              </button>
+              {id === "settings" && page === "settings" && desktop && settingsAvailable && (
+                <nav className="settings-subnav" aria-label={t("Server settings navigation")}>
+                  {settingsSections.map(({ id: section, label }) => (
+                    <button
+                      key={section}
+                      className={
+                        settingsSection === section
+                          ? "settings-subnav-item active"
+                          : "settings-subnav-item"
+                      }
+                      disabled={settingsNavigation?.blocked ?? true}
+                      aria-current={settingsSection === section ? "step" : undefined}
+                      onClick={() => {
+                        setSettingsSection(section);
+                        setMobileNav(false);
+                      }}
+                    >
+                      <span>{t(label)}</span>
+                      {settingsNavigation?.dirty.includes(section) ? (
+                        <span aria-label={t("Unsaved changes")}>●</span>
+                      ) : settingsNavigation?.completed.includes(section) ? (
+                        <Check aria-label={t("Completed")} />
+                      ) : settingsNavigation?.skipped.includes(section) ? (
+                        <span aria-label={t("Skipped")}>—</span>
+                      ) : null}
+                    </button>
+                  ))}
+                </nav>
               )}
-            </button>
+            </div>
           ))}
         </nav>
         <div className="sidebar-guide">
@@ -360,6 +408,25 @@ export default function App() {
               </Button>
             </div>
           )}
+          <div className="reboot-notice-stack">
+            {workspace.servers
+              .filter(
+                (server) =>
+                  connectedIds.includes(server.id) && deployments[server.id]?.rebootRequired,
+              )
+              .map((server) => (
+                <ServerRebootNotice
+                  key={server.id}
+                  server={server}
+                  status={deployments[server.id]}
+                  dirty={
+                    settingsNavigation?.serverId === server.id && !!settingsNavigation.dirty.length
+                  }
+                  blocked={settingsNavigation?.serverId === server.id && settingsNavigation.blocked}
+                  onReboot={() => rebootRequested(server.id)}
+                />
+              ))}
+          </div>
           {workspace.servers
             .filter((server) => rebootingIds.includes(server.id))
             .map((server) => (
@@ -404,9 +471,6 @@ export default function App() {
                   onConfigure={() => {
                     void refresh();
                     navigate("settings");
-                  }}
-                  onReboot={() => {
-                    if (selected) rebootRequested(selected.id);
                   }}
                   onBack={() => navigate("overview")}
                 />
@@ -482,7 +546,10 @@ export default function App() {
                           id="settings-server"
                           className="native-select"
                           value={selected?.id ?? workspace.servers[0].id}
-                          onChange={(event) => setSelectedId(event.target.value)}
+                          onChange={(event) => {
+                            setSelectedId(event.target.value);
+                            setSettingsSection("model");
+                          }}
                         >
                           {workspace.servers.map((server) => (
                             <option value={server.id} key={server.id}>
@@ -502,12 +569,11 @@ export default function App() {
                             onConnect={() => connectionPage(selected ?? workspace.servers[0])}
                             onSetup={() => installationPage(selected ?? workspace.servers[0])}
                             onStatus={(status) =>
-                              setDeployments((previous) => ({
-                                ...previous,
-                                [(selected ?? workspace.servers[0]).id]: status,
-                              }))
+                              updateDeployment((selected ?? workspace.servers[0]).id, status)
                             }
-                            onReboot={() => rebootRequested((selected ?? workspace.servers[0]).id)}
+                            section={settingsSection}
+                            onSectionChange={setSettingsSection}
+                            onNavigation={updateSettingsNavigation}
                           />
                         ) : (
                           <ModelSettings

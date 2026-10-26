@@ -35,11 +35,11 @@ The release checks need a Git working tree. If you copy the source folder withou
 Examples of collected filenames:
 
 ```text
-releases/linux-x86_64/Hermes-Companion_0.1.6_linux-x86_64.deb
-releases/linux-x86_64/Hermes-Companion_0.1.6_linux-x86_64.AppImage
-releases/windows-x86_64/Hermes-Companion_0.1.6_windows-x86_64_setup.exe
-releases/macos-aarch64/Hermes-Companion_0.1.6_macos-aarch64.dmg
-releases/macos-x86_64/Hermes-Companion_0.1.6_macos-x86_64.dmg
+releases/linux-x86_64/Hermes-Companion_0.1.7_linux-x86_64.deb
+releases/linux-x86_64/Hermes-Companion_0.1.7_linux-x86_64.AppImage
+releases/windows-x86_64/Hermes-Companion_0.1.7_windows-x86_64_setup.exe
+releases/macos-aarch64/Hermes-Companion_0.1.7_macos-aarch64.dmg
+releases/macos-x86_64/Hermes-Companion_0.1.7_macos-x86_64.dmg
 ```
 
 Each platform folder also contains `SHA256SUMS-<platform>.txt`. Those are generated files and stay outside Git. To collect an already completed native build without compiling again, run `npm run release:collect`.
@@ -76,11 +76,11 @@ The [checks workflow](../.github/workflows/checks.yml) validates versions, file 
 
 Keep `package.json`, the root entry in `package-lock.json`, both Cargo manifests and `src-tauri/tauri.conf.json` on the same version. Update the workspace entries in `Cargo.lock` when changing Cargo versions. Run `npm run check:release` before tagging.
 
-For version 0.1.6, after committing and pushing the release changes:
+For version 0.1.7, after committing and pushing the release changes:
 
 ```bash
-git tag v0.1.6
-git push origin v0.1.6
+git tag v0.1.7
+git push origin v0.1.7
 ```
 
 The tag must match the application version. Once every build succeeds, the workflow creates or updates a **draft prerelease** containing the five installers, signed update bundles, `latest.json` and per-platform SHA-256 manifests. It refuses to replace files in a published release. Review the packages and [release notes](release-notes.md), perform the checks below and publish the draft manually when ready. Public publishing is not automatic.
@@ -89,7 +89,7 @@ The workflow uses GitHub's built-in token. Read access is sufficient for builds;
 
 ## Install and verify packages
 
-- **Linux DEB:** on a compatible Debian/Ubuntu desktop, run `sudo apt install ./Hermes-Companion_0.1.6_linux-x86_64.deb`, then launch Hermes Companion from the application menu.
+- **Linux DEB:** on a compatible Debian/Ubuntu desktop, run `sudo apt install ./Hermes-Companion_0.1.7_linux-x86_64.deb`, then launch Hermes Companion from the application menu.
 - **Linux AppImage:** make the downloaded file executable and launch it. If FUSE is unavailable, use the AppImage extraction mode described by the Tauri guide. A graphical session and a compatible build-host ABI are still required.
 - **Windows:** run the `_setup.exe`, then launch the installed app. These preview packages have no publisher certificate, so Windows may display a reputation warning.
 - **macOS:** select the DMG matching the CPU, open it and drag the app to Applications. Packages use ad-hoc signing and are not notarized. macOS may require approval in Privacy & Security; see [Tauri's explanation](https://v2.tauri.app/distribute/sign/macos/). Do not disable Gatekeeper system-wide.
@@ -124,6 +124,6 @@ Release jobs generate update artifacts, sign their bytes with a bound applicatio
 
 `npm run release` uses the ignored local signing files when present. Other developers can build local installers without that private key; the helper disables update-artifact generation for those builds. Such a local app can still verify future official updates using the public key.
 
-Users of Companion 0.1.0/0.1.1 must install 0.1.6 manually once. Versions from 0.1.2 onward can install published signed releases through the update button. Windows/macOS full replacement and restart still require manual package testing.
+Users of Companion 0.1.0/0.1.1 must install 0.1.7 manually once. Versions from 0.1.2 onward can install published signed releases through the update button. Windows/macOS full replacement and restart still require manual package testing.
 
 The macOS configuration must request both `app` and `dmg` bundle targets. The `app` target produces the `.app.tar.gz` updater archive; the DMG remains the manual installer. Release tests check this configuration and reject a DMG-only signed artifact list for either Mac architecture.

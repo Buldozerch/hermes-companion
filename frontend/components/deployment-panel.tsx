@@ -2,7 +2,7 @@ import { useSetupCredentials } from "@/components/setup-credentials";
 import { ProviderSignIn } from "@/components/provider-sign-in";
 import { usesBrowserAuth } from "@/lib/setup-catalog";
 import { useEffect, useRef, useState } from "react";
-import { Check, Download, FileText, Play, Power, RotateCw, Square, Terminal } from "lucide-react";
+import { Check, Download, FileText, Play, RotateCw, Square, Terminal } from "lucide-react";
 import { useLocale } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,8 +39,7 @@ export function DeploymentPanel({
   blockers = [],
   showProviderSignIn = true,
   title = "Hermes installation",
-  onReboot,
-  hasUnsavedChanges = false,
+  autoLogs = false,
 }: {
   server: Server;
   connected: boolean;
@@ -48,8 +47,7 @@ export function DeploymentPanel({
   blockers?: string[];
   showProviderSignIn?: boolean;
   title?: string;
-  onReboot?: () => void;
-  hasUnsavedChanges?: boolean;
+  autoLogs?: boolean;
 }) {
   const { t } = useLocale();
   const credentials = useSetupCredentials(server.id);
@@ -57,11 +55,10 @@ export function DeploymentPanel({
   const [error, setError] = useState<unknown>(null);
   const [syncError, setSyncError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
-  const [rebooting, setRebooting] = useState(false);
   const [logs, setLogs] = useState<string | null>(null);
   const request = useRef(0);
   useEffect(() => {
-    if (!connected || !desktop || rebooting) return;
+    if (!connected || !desktop) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
@@ -87,7 +84,27 @@ export function DeploymentPanel({
       clearTimeout(timer);
       request.current++;
     };
-  }, [connected, server.id, rebooting]);
+  }, [connected, server.id]);
+  useEffect(() => {
+    if (!autoLogs || !connected) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    async function pollLogs() {
+      try {
+        const result = await api.remoteLogs(server.id);
+        if (active) setLogs(result);
+      } catch (error) {
+        if (active) setError(error);
+      } finally {
+        if (active) timer = setTimeout(() => void pollLogs(), 6000);
+      }
+    }
+    void pollLogs();
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [autoLogs, connected, server.id]);
   const installing = status?.state === "running" || status?.state === "starting";
   const preparing = status?.operation === "provider";
   const updating = status?.operation === "update";
@@ -235,7 +252,8 @@ export function DeploymentPanel({
           key={`${server.id}:${status.jobId}`}
           serverId={server.id}
           status={status}
-          connected={connected && !rebooting}
+          connected={connected}
+          rawOutput={autoLogs ? (logs ?? "") : undefined}
         />
       )}
       {status?.state === "succeeded" && (
@@ -263,42 +281,6 @@ export function DeploymentPanel({
             disabled={installing || !connected}
           />
         )}
-      {status?.rebootRequired && (
-        <Notice title="Reboot required">
-          <p>
-            {t(
-              "Ubuntu requires a reboot. Rebooting restarts the entire VPS and disconnects SSH briefly.",
-            )}
-          </p>
-          {hasUnsavedChanges && <p>{t("Save or discard your settings before rebooting.")}</p>}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={
-              !desktop || !connected || busy || installing || hasUnsavedChanges || !onReboot
-            }
-            onClick={async () => {
-              setBusy(true);
-              setRebooting(true);
-              setError(null);
-              setSyncError(null);
-              request.current++;
-              try {
-                await api.rebootServer(server.id);
-                onReboot?.();
-              } catch (error) {
-                setError(error);
-              } finally {
-                setBusy(false);
-                setRebooting(false);
-              }
-            }}
-          >
-            <Power data-icon="inline-start" />
-            {t("Reboot server")}
-          </Button>
-        </Notice>
-      )}
       {!!visibleError && (
         <Notice error title="Operation failed">
           <span lang="en" translate="no">
@@ -380,28 +362,30 @@ export function DeploymentPanel({
             <RotateCw data-icon="inline-start" />
             {t("Restart")}
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={busy}
-            onClick={async () => {
-              if (logs !== null) {
-                setLogs(null);
-                return;
-              }
-              setBusy(true);
-              try {
-                setLogs(await api.remoteLogs(server.id));
-              } catch (error) {
-                setError(error);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <FileText data-icon="inline-start" />
-            {t(logs === null ? "View diagnostic logs" : "Hide diagnostic logs")}
-          </Button>
+          {!autoLogs && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={async () => {
+                if (logs !== null) {
+                  setLogs(null);
+                  return;
+                }
+                setBusy(true);
+                try {
+                  setLogs(await api.remoteLogs(server.id));
+                } catch (error) {
+                  setError(error);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <FileText data-icon="inline-start" />
+              {t(logs === null ? "View diagnostic logs" : "Hide diagnostic logs")}
+            </Button>
+          )}
         </div>
       )}
       {!!status?.events.length && (

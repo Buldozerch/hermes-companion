@@ -5,6 +5,7 @@ pub mod deployment;
 pub mod error;
 pub mod managed_settings;
 pub mod models;
+pub mod onboarding;
 pub mod plan;
 pub mod provider_auth;
 pub mod provider_models;

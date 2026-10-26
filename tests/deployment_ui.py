@@ -117,7 +117,7 @@ with sync_playwright() as p:
     page.evaluate('window.__QA__.authStatus="approved"')
     expect(page.get_by_text('Account authorized. Apply changes to use this connection.',exact=True)).to_be_visible(timeout=10000)
     assert page.evaluate('window.__QA__.applyCalls')==0
-    page.get_by_role('button',name='Apply changes',exact=True).click()
+    page.get_by_role('button',name='Save and continue',exact=True).click()
     expect(page.get_by_role('progressbar')).to_be_visible()
     assert page.evaluate('window.__QA__.applyCalls')==1
     page.evaluate("Object.assign(window.__QA__.job,{state:'succeeded',step:'complete'})")
