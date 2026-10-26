@@ -18,6 +18,7 @@ export function ServerOperationDrawer({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        placement="right"
         className="server-operation-drawer"
         onCloseAutoFocus={(event) => {
           event.preventDefault();

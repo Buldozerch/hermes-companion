@@ -64,6 +64,7 @@ python -m venv .venv
 .venv/bin/python tests/reboot_ui.py
 .venv/bin/python tests/transport_ui.py
 .venv/bin/python tests/management_walkthrough_ui.py
+.venv/bin/python tests/settings_feedback_ui.py
 ```
 
 On Windows use `.venv\Scripts\python` instead of `.venv/bin/python`. The GUI scripts support `--chromium /path/to/chrome` for an existing browser. Screenshots use synthetic server data. Native WebView differences still need the [manual desktop checks](releases.md#manual-checks).

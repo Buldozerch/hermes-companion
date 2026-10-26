@@ -427,9 +427,19 @@ export function HermesManagement({
       <header className="management-heading">
         <div>
           <h2>{server.name}</h2>
-          <p>{t("Current configuration from your server")}</p>
+          <p>
+            {t(
+              "Refresh settings reads the server configuration. Save your changes using the bottom action bar.",
+            )}
+          </p>
         </div>
-        <Badge variant="outline">
+        <Badge
+          variant={
+            !running && !pending && status.serviceActive && status.apiHealthy
+              ? "success"
+              : "outline"
+          }
+        >
           {t(
             running || pending
               ? status.operation === "provider"
@@ -438,7 +448,9 @@ export function HermesManagement({
                   ? "Updating Hermes…"
                   : "Applying settings"
               : status.serviceActive
-                ? "Running"
+                ? status.apiHealthy
+                  ? "Running"
+                  : "API not ready"
                 : "Stopped",
           )}
         </Badge>
@@ -446,13 +458,18 @@ export function HermesManagement({
           variant="outline"
           size="sm"
           disabled={busy || running || !!pending || (!!changes.count && !error)}
+          title={t(
+            changes.count && error
+              ? "Discard your edits and read the current settings from the server."
+              : "Read the current Hermes settings from the server into this form.",
+          )}
           onClick={() => {
             setSaved(false);
             void reload();
           }}
         >
           <RefreshCw data-icon="inline-start" />
-          {t(changes.count && error ? "Discard changes and reload" : "Reload from server")}
+          {t(changes.count && error ? "Discard edits and refresh settings" : "Refresh settings")}
         </Button>
       </header>
       {!guided && (

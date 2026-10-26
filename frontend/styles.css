@@ -3096,18 +3096,17 @@ progress {
   flex-basis: 100%;
 }
 .server-operation-drawer[data-slot="dialog-content"] {
-  top: 0;
-  right: 0;
-  left: auto;
-  translate: 0 0;
-  transform: none;
-  display: flex;
-  flex-direction: column;
   width: min(42rem, 100vw);
   max-width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
   height: 100dvh;
   max-height: 100dvh;
   border-radius: 0;
+  overflow: hidden;
+}
+.status-positive {
+  color: var(--success);
 }
 .server-operation-drawer [data-slot="dialog-header"] {
   padding-right: 1.5rem;

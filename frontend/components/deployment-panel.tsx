@@ -184,11 +184,15 @@ export function DeploymentPanel({
         </div>
         <div>
           <dt>{t("Service")}</dt>
-          <dd>{t(status?.serviceActive ? "Running" : "Stopped")}</dd>
+          <dd className={status?.serviceActive ? "status-positive" : undefined}>
+            {t(status?.serviceActive ? "Running" : "Stopped")}
+          </dd>
         </div>
         <div>
           <dt>{t("Local API")}</dt>
-          <dd>{t(status?.apiHealthy ? "Healthy" : "Not ready")}</dd>
+          <dd className={status?.apiHealthy ? "status-positive" : undefined}>
+            {t(status?.apiHealthy ? "Healthy" : "Not ready")}
+          </dd>
         </div>
         <div>
           <dt>{t("Model credentials")}</dt>

@@ -981,5 +981,11 @@
   "Next section": "Следующий раздел",
   "Server settings navigation": "Разделы настроек сервера",
   "Completed": "Готово",
-  "Skipped": "Отложено"
+  "Skipped": "Отложено",
+  "Refresh settings": "Обновить данные",
+  "Discard edits and refresh settings": "Отменить изменения и обновить данные",
+  "Read the current Hermes settings from the server into this form.": "Показывает в форме текущие настройки Hermes с сервера.",
+  "Discard your edits and read the current settings from the server.": "Отменяет несохранённые изменения и показывает текущие настройки с сервера.",
+  "API not ready": "API ещё не готов",
+  "Refresh settings reads the server configuration. Save your changes using the bottom action bar.": "«Обновить данные» перечитывает настройки с сервера. Сохраняйте изменения через панель снизу."
 }

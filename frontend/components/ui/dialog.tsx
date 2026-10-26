@@ -39,9 +39,11 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  placement = "center",
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  placement?: "center" | "right";
 }) {
   const { t } = useLocale();
   return (
@@ -49,8 +51,12 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        data-placement={placement}
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-sm border border-border bg-card p-5 sm:max-w-lg",
+          "fixed z-50 gap-4 border border-border bg-card p-5",
+          placement === "right"
+            ? "inset-y-0 right-0 flex w-full flex-col"
+            : "top-[50%] left-[50%] grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] rounded-sm sm:max-w-lg",
           className,
         )}
         {...props}
